@@ -5,8 +5,8 @@ python:
   - '2.7'
 
 branches:
-  only:
-    - develop
+  except:
+    - master
 
 before_install:
   - sudo apt-get update && sudo apt-get install swig
