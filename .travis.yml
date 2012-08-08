@@ -13,6 +13,9 @@ before_install:
   - pip install http://dl.dropbox.com/u/174789/m2crypto-0.20.1.tar.gz
   - "if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install unittest2; fi"
 
+before_script:
+    - "ulimit -n 4096"
+
 install: pip install -r requirements.txt --use-mirrors
 script: python setup.py test
 
