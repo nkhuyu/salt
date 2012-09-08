@@ -71,7 +71,15 @@ class SaltRenderError(SaltException):
     Used when a renderer needs to raise an explicit error
     '''
 
+
 class SaltReqTimeoutError(SaltException):
     '''
     Thrown when a salt master request call fails to return within the timeout
+    '''
+
+
+class SaltMasterRetryLater(SaltException):
+    '''
+    Thrown by request of the salt-master when it can't handle the current
+    request, yep, it can be retried later.
     '''

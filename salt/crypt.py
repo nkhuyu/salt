@@ -20,7 +20,12 @@ from Crypto.Cipher import AES
 import salt.utils
 import salt.payload
 import salt.utils.verify
-from salt.exceptions import AuthenticationError, SaltClientError, SaltReqTimeoutError
+from salt.exceptions import (
+    AuthenticationError,
+    SaltClientError,
+    SaltReqTimeoutError,
+    SaltMasterRetryLater
+)
 
 log = logging.getLogger(__name__)
 
@@ -248,10 +253,17 @@ class Auth(object):
                 self.opts['master_uri'],
                 self.opts.get('id', '')
                 )
+
         try:
             payload = sreq.send_auto(self.minion_sign_in_payload())
         except SaltReqTimeoutError:
             return 'retry'
+        except SaltMasterRetryLater, err:
+            log.warning(
+                'salt master asked us to retry later: {0}'.format(err)
+            )
+            return 'retry-later'
+
         if 'load' in payload:
             if 'ret' in payload['load']:
                 if not payload['load']['ret']:
@@ -391,8 +403,10 @@ class SAuth(Auth):
         '''
         creds = self.sign_in()
         if creds == 'retry':
-            log.error('Failed to authenticate with the master, verify this'\
-                + ' minion\'s public key has been accepted on the salt master')
+            log.error(
+                'Failed to authenticate with the master, verify this '
+                'minion\'s public key has been accepted on the salt master'
+            )
             sys.exit(2)
         return Crypticle(self.opts, creds['aes'])
 

@@ -18,9 +18,15 @@ import traceback
 import zmq
 
 # Import salt libs
-from salt.exceptions import AuthenticationError, \
-    CommandExecutionError, CommandNotFoundError, SaltInvocationError, \
-    SaltClientError, SaltReqTimeoutError
+from salt.exceptions import (
+    AuthenticationError,
+    CommandExecutionError,
+    CommandNotFoundError,
+    SaltInvocationError,
+    SaltClientError,
+    SaltReqTimeoutError,
+    SaltMasterRetryLater
+)
 import salt.client
 import salt.crypt
 import salt.loader
@@ -294,7 +300,9 @@ class Minion(object):
             except SaltInvocationError as exc:
                 msg = 'Problem executing "{0}": {1}'
                 log.error(msg.format(function_name, str(exc)))
-                ret['return'] = 'ERROR executing {0}: {1}'.format(function_name, str(exc))
+                ret['return'] = 'ERROR executing {0}: {1}'.format(
+                    function_name, str(exc)
+                )
             except Exception as exc:
                 trb = traceback.format_exc()
                 msg = 'The minion function caused an exception: {0}'
@@ -402,10 +410,26 @@ class Minion(object):
                     load['out'] = oput
         except KeyError:
             pass
-        try:
-            ret_val = sreq.send('aes', self.crypticle.dumps(load))
-        except SaltReqTimeoutError:
-            ret_val = ''
+
+        # XXX: We might want to either set a max retries or let the user choose
+        # how many times is too much and just give up
+        retry_later_throtle_down = 1
+        while True:
+            try:
+                ret_val = sreq.send('aes', self.crypticle.dumps(load))
+                break
+            except SaltReqTimeoutError:
+                ret_val = ''
+            except SaltMasterRetryLater, err:
+                log.warning(
+                    'salt-master is asking to retry latter: {0}'.format(err)
+                )
+                log.warning(
+                    'retrying in {0}s'.format(retry_later_throtle_down)
+                )
+                time.sleep(retry_later_throtle_down)
+                retry_later_throtle_down += 1
+
         if isinstance(ret_val, string_types) and not ret_val:
             # The master AES key has changed, reauth
             self.authenticate()
@@ -435,17 +459,32 @@ class Minion(object):
         in, signing in can occur as often as needed to keep up with the
         revolving master aes key.
         '''
-        log.debug('Attempting to authenticate with the Salt Master at {0}'.format(
-            self.opts['master_ip']
-        ))
+        log.debug(
+            'Attempting to authenticate with the Salt Master at {0}'.format(
+                self.opts['master_ip']
+            )
+        )
         auth = salt.crypt.Auth(self.opts)
+
+        # XXX: We might want to either set a max retries or let the user choose
+        # how many times is too much and just give up
+        retry_later_throttle_down = 1
         while True:
             creds = auth.sign_in()
-            if creds != 'retry':
+            if creds not in ('retry', 'retry-later'):
                 log.info('Authentication with master successful!')
                 break
-            log.info('Waiting for minion key to be accepted by the master.')
-            time.sleep(self.opts['acceptance_wait_time'])
+            if creds == 'retry':
+                log.info('Waiting for minion key to be accepted by the master')
+                time.sleep(self.opts['acceptance_wait_time'])
+            else:
+                log.warn(
+                    'Salt master asked us to retry later. Retrying '
+                    'in {0}s.'.format(retry_later_throttle_down)
+                )
+                time.sleep(retry_later_throttle_down)
+                retry_later_throttle_down += 1
+
         self.aes = creds['aes']
         self.publish_port = creds['publish_port']
         self.crypticle = salt.crypt.Crypticle(self.opts, self.aes)
@@ -580,7 +619,7 @@ class Minion(object):
                             epub_sock.send(package)
                         except Exception:
                             pass
-                except Exception as exc:
+                except Exception:
                     log.critical(traceback.format_exc())
         else:
             while True:
@@ -710,7 +749,9 @@ class Matcher(object):
                     matcher = item['match']
         if hasattr(self, matcher + '_match'):
             if matcher == 'nodegroup':
-                return getattr(self, '{0}_match'.format(matcher))(match, nodegroups)
+                return getattr(
+                    self, '{0}_match'.format(matcher)
+                )(match, nodegroups)
             return getattr(self, '{0}_match'.format(matcher))(match)
         else:
             log.error('Attempting to match with unknown matcher: {0}'.format(
@@ -799,10 +840,17 @@ class Matcher(object):
         log.debug('tgt {0}'.format(tgt))
         comps = tgt.split(':')
         if len(comps) < 2:
-            log.error('Got insufficient arguments for pillar match statement from master')
+            log.error(
+                'Got insufficient arguments for pillar match statement '
+                'from master'
+            )
             return False
         if comps[0] not in self.opts['pillar']:
-            log.error('Got unknown pillar match statement from master: {0}'.format(comps[0]))
+            log.error(
+                'Got unknown pillar match statement from master: {0}'.format(
+                    comps[0]
+                )
+            )
             return False
         if isinstance(self.opts['pillar'][comps[0]], list):
             # We are matching a single component to a single list member

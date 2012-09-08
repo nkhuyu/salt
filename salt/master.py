@@ -70,6 +70,17 @@ def clean_proc(proc, wait_for_kill=10):
         pass
 
 
+def change_ulimit():
+    print 'Waitint to throtle ulimit...', resource.getrlimit(resource.RLIMIT_NOFILE)
+    import time
+    time.sleep(60)
+    print 'Limiting!!!!!!!!!!!'
+    mof_s, mof_h = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (96, mof_h))
+    print 'LIMITED!!!!!!!!!!', resource.getrlimit(resource.RLIMIT_NOFILE)
+
+    return
+
 class MasterExit(SystemExit):
     '''
     Named exit exception for the master process exiting
@@ -212,6 +223,10 @@ class Master(SMaster):
                 '{0}/{1}'.format(mof_s, mof_h)
             )
 
+        import threading
+        t = threading.Thread(target=change_ulimit)
+        t.start()
+
     def start(self):
         '''
         Turn on the master server components
@@ -254,6 +269,19 @@ class Master(SMaster):
             raise MasterExit
 
         signal.signal(signal.SIGTERM, sigterm_clean)
+
+        def sigabort_clean(signum, frame):
+            signals = dict((k, v) for v, k in signal.__dict__.iteritems() if v.startswith('SIG'))
+            print 'YYYYYYEEEEEEEAAAAAAHHHH {0}:{1}\n\n\n\n'.format(signum, signals[signum])
+            #aise MasterExit
+
+        for sname in [k for k in dir(signal) if k.isupper()]:
+            try:
+                signal.signal(getattr(signal, sname), sigabort_clean)
+            except (ValueError, RuntimeError):
+                continue
+
+#        signal.signal(signal.SIGABRT, sigabort_clean)
 
         try:
             reqserv.run()
@@ -333,6 +361,9 @@ class Publisher(multiprocessing.Process):
                         except zmq.ZMQError:
                             pass
 
+        except Exception, err:
+            print 'aaaaaaaaaaaaaaaa\n\n\n'
+            raise
         except KeyboardInterrupt:
             pub_sock.close()
             pull_sock.close()
@@ -385,6 +416,9 @@ class ReqServer(object):
                 if exc.errno == errno.EINTR:
                     continue
                 raise exc
+            except Exception, err:
+                print '\n\n\n11111111111', err
+                raise
 
     def start_publisher(self):
         '''
@@ -394,10 +428,9 @@ class ReqServer(object):
         self.publisher = Publisher(self.opts)
         self.publisher.start()
 
-
     def start_event_publisher(self):
         '''
-        Start the salt publisher interface
+        Start the salt event's publisher interface
         '''
         # Start the publisher
         self.eventpublisher = salt.utils.event.EventPublisher(self.opts)
@@ -451,6 +484,20 @@ class MWorker(multiprocessing.Process):
                     if exc.errno == errno.EINTR:
                         continue
                     raise exc
+                except Exception, err:
+                    print 222222222222, err
+                    raise err
+#                except IOError, err:
+#                    if err.errno == errno.EMFILE:
+#                        print 'Catched the ERRRRRRR22222111111111'
+#                        socket.send(
+#                            self.serial.dumps(
+#                                self.crypticle.dumps({'res_load': True})
+#                            )
+#                        )
+#                        continue
+#                    raise err
+
         except KeyboardInterrupt:
             socket.close()
 
@@ -465,9 +512,26 @@ class MWorker(multiprocessing.Process):
             load = payload['load']
         except KeyError:
             return ''
-        return {'aes': self._handle_aes,
+#        except IOError, err:
+#            print 777777777
+#            import errno
+#            if err.errno == errno.EMFILE:
+#                print 'Catched the ERRRRRRR'
+#                return ''
+#            raise
+        try:
+            return {'aes': self._handle_aes,
                 'pub': self._handle_pub,
                 'clear': self._handle_clear}[key](load)
+        except IOError, err:
+            if err.errno == errno.EMFILE:
+                print 'CATCCCCCCCCCCHHHHHH'
+                return {
+                    'retry-later': 'Too many files open. Please retry later.'
+                }
+        except Exception, err:
+            print 33333333333, err
+            raise err
 
     def _handle_clear(self, load):
         '''
@@ -1290,6 +1354,30 @@ class ClearFuncs(object):
         with open(pubfn, 'w+') as fp_:
             fp_.write(load['pub'])
         pub = None
+#        try:
+#            log.info('Authentication accepted from {id}'.format(**load))
+#            with open(pubfn, 'w+') as fp_:
+#                fp_.write(load['pub'])
+#            pub = None
+#        except IOError, err:
+#            if err.errno == 24:
+#                print 55555555555
+#                log.warning('Too many open files, rejecting authentication in '
+#                            'order not to crash the master')
+#
+#                eload = {
+#                    'result': False,
+#                    'id': load['id'],
+#                    'pub': load['pub']
+#                }
+#            self.event.fire_event(eload, 'auth')
+#            return {
+#                'enc': 'clear',
+#                'load': {
+#                    'ret': False,
+#                    'retry': True
+#                }
+#            }
 
         # The key payload may sometimes be corrupt when using auto-accept
         # and an empty request comes in
