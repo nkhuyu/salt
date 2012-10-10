@@ -26,7 +26,11 @@ tests/integration/tmp/
 
 # code coverage outputs genereated by coverage.py
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 /.project
 /.pydevproject
+
+# test vagrant machines
+tests/vg/*/.vagrant
