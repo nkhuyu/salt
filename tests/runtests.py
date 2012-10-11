@@ -86,10 +86,12 @@ def run_integration_tests(opts):
     '''
     Execute the integration tests suite
     '''
-    smax_open_files, hmax_open_files = resource.getrlimit(resource.RLIMIT_NOFILE)
+    (smax_open_files,
+     hmax_open_files) = resource.getrlimit(resource.RLIMIT_NOFILE)
     if smax_open_files < REQUIRED_OPEN_FILES:
         print('~' * PNUM)
-        print('Max open files setting is too low({0}) for running the tests'.format(smax_open_files))
+        print('Max open files setting is too low({0}) for running the '
+              'tests'.format(smax_open_files))
         print('Trying to raise the limit to {0}'.format(REQUIRED_OPEN_FILES))
         if hmax_open_files < 4096:
             hmax_open_files = 4096  # Decent default?
@@ -99,7 +101,8 @@ def run_integration_tests(opts):
                 (REQUIRED_OPEN_FILES, hmax_open_files)
             )
         except Exception, err:
-            print('ERROR: Failed to raise the max open files setting -> {0}'.format(err))
+            print('ERROR: Failed to raise the max open files '
+                  'setting -> {0}'.format(err))
             print('Please issue the following command on your console:')
             print('  ulimit -n {0}'.format(REQUIRED_OPEN_FILES))
             sys.exit(1)
@@ -221,19 +224,30 @@ def parse_opts():
             default=False,
             help='Run destructive tests. These tests can include adding or '
                  'removing users from your system for example. Default: '
-                 '%default'
-    )
+                 '%default')
     parser.add_option('--no-report',
             default=False,
             action='store_true',
-            help='Do NOT show the overall tests result'
-    )
+            help='Do NOT show the overall tests result')
 
-    parser.add_option('--coverage',
-            default=False,
-            action='store_true',
-            help='Run tests and report code coverage'
+    coverage_group = optparse.OptionGroup(
+        parser,
+        'Coverage Options'
     )
+    coverage_group.add_option(
+        '--coverage',
+        default=False,
+        action='store_true',
+        help='Run tests and report code coverage'
+    )
+    coverage_group.add_option(
+        '--no-coverage-report',
+        default=False,
+        action='store_true',
+        help='Do not generate the coverage HTML report. Will only save '
+             'coverage information to the filesystem.'
+    )
+    parser.add_option_group(coverage_group)
 
     options, _ = parser.parse_args()
 
@@ -314,80 +328,14 @@ def parse_opts():
     return options
 
 
-if __name__ == '__main__':
-    opts = parse_opts()
-    if opts.coverage:
-        code_coverage.start()
-
-    overall_status = []
-    status = run_integration_tests(opts)
-    overall_status.extend(status)
-    status = run_unit_tests(opts)
-    overall_status.extend(status)
-    false_count = overall_status.count(False)
-
-    if opts.no_report:
-        if opts.coverage:
-            code_coverage.stop()
-            code_coverage.save()
-
-        if false_count > 0:
-            sys.exit(1)
-        else:
-            sys.exit(0)
-
-    print
-    print_header(u'  Overall Tests Report  ', sep=u'=', centered=True, inline=True)
-
-    no_problems_found = True
-    for (name, results) in TEST_RESULTS:
-        if not results.failures and not results.errors and not results.skipped:
-            continue
-
-        no_problems_found = False
-
-        print_header(u'\u22c6\u22c6\u22c6 {0}  '.format(name), sep=u'\u22c6', inline=True)
-        if results.skipped:
-            print_header(u' --------  Skipped Tests  ', sep='-', inline=True)
-            maxlen = len(max([tc.id() for (tc, reason) in results.skipped], key=len))
-            fmt = u'   \u2192 {0: <{maxlen}}  \u2192  {1}'
-            for tc, reason in results.skipped:
-                print(fmt.format(tc.id(), reason, maxlen=maxlen))
-            print_header(u' ', sep='-', inline=True)
-
-        if results.errors:
-            print_header(u' --------  Tests with Errors  ', sep='-', inline=True)
-            for tc, reason in results.errors:
-                print_header(u'   \u2192 {0}  '.format(tc.id()), sep=u'.', inline=True)
-                for line in reason.rstrip().splitlines():
-                    print('       {0}'.format(line.rstrip()))
-                print_header(u'   ', sep=u'.', inline=True)
-            print_header(u' ', sep='-', inline=True)
-
-        if results.failures:
-            print_header(u' --------  Failed Tests  ', sep='-', inline=True)
-            for tc, reason in results.failures:
-                print_header(u'   \u2192 {0}  '.format(tc.id()), sep=u'.', inline=True)
-                for line in reason.rstrip().splitlines():
-                    print('       {0}'.format(line.rstrip()))
-                print_header(u'   ', sep=u'.', inline=True)
-            print_header(u' ', sep='-', inline=True)
-
-        print_header(u'', sep=u'\u22c6', inline=True)
-
-    if no_problems_found:
-        print_header(
-            u'\u22c6\u22c6\u22c6  No Problems Found While Running Tests  ',
-            sep=u'\u22c6', inline=True
-        )
-
-    print_header('  Overall Tests Report  ', sep='=', centered=True, inline=True)
-
+def stop_coverage(opts):
     if opts.coverage:
         print('Stopping and saving coverage info')
         code_coverage.stop()
         code_coverage.save()
 
+    if opts.coverage and not opts.no_coverage_report:
+        code_coverage.combine()
         report_dir = os.path.join(os.path.dirname(__file__), 'coverage-report')
         print(
             '\nGenerating Coverage HTML Report Under {0!r} ...'.format(
@@ -401,6 +349,95 @@ if __name__ == '__main__':
             shutil.rmtree(report_dir)
         code_coverage.html_report(directory=report_dir)
         print('Done.\n')
+
+
+if __name__ == '__main__':
+    opts = parse_opts()
+    if opts.coverage:
+        code_coverage.start()
+
+    overall_status = []
+    status = run_integration_tests(opts)
+    overall_status.extend(status)
+    status = run_unit_tests(opts)
+    overall_status.extend(status)
+    false_count = overall_status.count(False)
+
+    if opts.no_report:
+        # Stop coverage and generate report
+        stop_coverage(opts)
+        logging.getLogger('salt.tests.runtests').warning('Tests Finished!')
+
+        if false_count > 0:
+            sys.exit(1)
+        else:
+            sys.exit(0)
+
+    print
+    print_header(
+        u'  Overall Tests Report  ', sep=u'=', centered=True, inline=True
+    )
+
+    no_problems_found = True
+    for (name, results) in TEST_RESULTS:
+        if not results.failures and not results.errors and not results.skipped:
+            continue
+
+        no_problems_found = False
+
+        print_header(
+            u'\u22c6\u22c6\u22c6 {0}  '.format(name),
+            sep=u'\u22c6', inline=True
+        )
+        if results.skipped:
+            print_header(u' --------  Skipped Tests  ', sep='-', inline=True)
+            maxlen = len(
+                max([tc.id() for (tc, reason) in results.skipped], key=len)
+            )
+            fmt = u'   \u2192 {0: <{maxlen}}  \u2192  {1}'
+            for tc, reason in results.skipped:
+                print(fmt.format(tc.id(), reason, maxlen=maxlen))
+            print_header(u' ', sep='-', inline=True)
+
+        if results.errors:
+            print_header(
+                u' --------  Tests with Errors  ', sep='-', inline=True
+            )
+            for tc, reason in results.errors:
+                print_header(
+                    u'   \u2192 {0}  '.format(tc.id()), sep=u'.', inline=True
+                )
+                for line in reason.rstrip().splitlines():
+                    print('       {0}'.format(line.rstrip()))
+                print_header(u'   ', sep=u'.', inline=True)
+            print_header(u' ', sep='-', inline=True)
+
+        if results.failures:
+            print_header(u' --------  Failed Tests  ', sep='-', inline=True)
+            for tc, reason in results.failures:
+                print_header(
+                    u'   \u2192 {0}  '.format(tc.id()), sep=u'.', inline=True
+                )
+                for line in reason.rstrip().splitlines():
+                    print('       {0}'.format(line.rstrip()))
+                print_header(u'   ', sep=u'.', inline=True)
+            print_header(u' ', sep='-', inline=True)
+
+        print_header(u'', sep=u'\u22c6', inline=True)
+
+    if no_problems_found:
+        print_header(
+            u'\u22c6\u22c6\u22c6  No Problems Found While Running Tests  ',
+            sep=u'\u22c6', inline=True
+        )
+
+    print_header(
+        '  Overall Tests Report  ', sep='=', centered=True, inline=True
+    )
+
+    # Stop coverage and generate report
+    stop_coverage(opts)
+    logging.getLogger('salt.tests.runtests').warning('Tests Finished!')
 
     if false_count > 0:
         sys.exit(1)
