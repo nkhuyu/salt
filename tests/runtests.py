@@ -27,17 +27,18 @@ try:
         os.chdir(
             os.path.join(
                 os.path.dirname(                # tests
-                    os.path.dirname(__name__)   # salt root
+                    os.path.dirname(__file__)   # salt root
                 ), 'salt'                       # salt module
             )
         )
-    except OSError:
-        pass
+    except OSError, err:
+        print 'Failed to change directory to salt\'s source: {0}'.format(err)
+
     # Setup coverage
     code_coverage = coverage.coverage(
         branch=True,
         data_file=COVERAGE_FILE,
-        source=os.getcwd(),
+        source=[os.getcwd()],
     )
 except ImportError:
     code_coverage = None
