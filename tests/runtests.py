@@ -11,36 +11,41 @@ import optparse
 import resource
 import tempfile
 
-# Import salt libs
-try:
-    import console
-    width, height = console.getTerminalSize()
-    PNUM = width
-except:
-    PNUM = 70
-import saltunittest
-from integration import PNUM, print_header, TestDaemon
-
 try:
     import xmlrunner
 except ImportError:
     xmlrunner = None
 
 TEST_DIR = os.path.dirname(os.path.normpath(os.path.abspath(__file__)))
-
+COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 
 try:
     import coverage
     # Cover any subprocess
     coverage.process_startup()
+    try:
+        os.chdir(
+            os.path.join(
+                os.path.dirname(                # tests
+                    os.path.dirname(__name__)   # salt root
+                ), 'salt'                       # salt module
+            )
+        )
+    except OSError:
+        pass
     # Setup coverage
     code_coverage = coverage.coverage(
         branch=True,
-        source=[os.path.join(os.path.dirname(TEST_DIR), 'salt')],
+        data_file=COVERAGE_FILE,
+        source=os.getcwd(),
     )
 except ImportError:
     code_coverage = None
 
+
+# Import salt libs
+import saltunittest
+from integration import PNUM, print_header, TestDaemon
 
 REQUIRED_OPEN_FILES = 2048
 TEST_RESULTS = []
