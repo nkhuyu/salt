@@ -19,7 +19,7 @@ try:
 except:
     PNUM = 70
 import saltunittest
-from integration import TestDaemon
+from integration import PNUM, print_header, TestDaemon
 
 try:
     import xmlrunner
@@ -43,26 +43,7 @@ except ImportError:
 
 
 REQUIRED_OPEN_FILES = 2048
-
 TEST_RESULTS = []
-
-def print_header(header, sep='~', top=True, bottom=True, inline=False,
-                 centered=False):
-    if top and not inline:
-        print(sep * PNUM)
-
-    if centered and not inline:
-        fmt = u'{0:^{width}}'
-    elif inline and not centered:
-        fmt = u'{0:{sep}<{width}}'
-    elif inline and centered:
-        fmt = u'{0:{sep}^{width}}'
-    else:
-        fmt = u'{0}'
-    print(fmt.format(header, sep=sep, width=PNUM))
-
-    if bottom and not inline:
-        print(sep * PNUM)
 
 
 def run_suite(opts, path, display_name, suffix='[!_]*.py'):

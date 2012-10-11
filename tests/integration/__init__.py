@@ -37,6 +37,37 @@ FILES = os.path.join(INTEGRATION_TEST_DIR, 'files')
 MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
 
 
+try:
+    import console
+    width, height = console.getTerminalSize()
+    PNUM = width
+except:
+    PNUM = 70
+
+
+def print_header(header, sep='~', top=True, bottom=True, inline=False,
+                 centered=False):
+    '''
+    Allows some pretty printing of headers on the console, either with a
+    "ruler" on bottom and/or top, inline, centered, etc.
+    '''
+    if top and not inline:
+        print(sep * PNUM)
+
+    if centered and not inline:
+        fmt = u'{0:^{width}}'
+    elif inline and not centered:
+        fmt = u'{0:{sep}<{width}}'
+    elif inline and centered:
+        fmt = u'{0:{sep}^{width}}'
+    else:
+        fmt = u'{0}'
+    print(fmt.format(header, sep=sep, width=PNUM))
+
+    if bottom and not inline:
+        print(sep * PNUM)
+
+
 def run_tests(TestCase):
     '''
     Run integration tests for a chosen test case.
