@@ -28,7 +28,7 @@ def run_tests(module=False, state=False, client=False, shell=False,
               runner=False, unit=False, verbose=1, xml=False, name=[],
               clean=False, no_clean=False, run_destructive=False,
               no_report=False, coverage=False, no_coverage_report=False,
-              pnum=70):
+              coverage_output=None, pnum=70):
 
     """
     Run tests.
@@ -92,6 +92,8 @@ def run_tests(module=False, state=False, client=False, shell=False,
         arg.append('--coverage')
     if no_coverage_report:
         arg.append('--no-coverage-report')
+    if coverage_output:
+        arg.append('--coverage-output={0}'.format(coverage_output))
 
     env = dict(COLUMNS=str(pnum), PNUM=str(pnum))
     cmd = '{0} {1} {2}'.format(python_bin, runtests_bin, ' '.join(arg))

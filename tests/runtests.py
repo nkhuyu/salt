@@ -27,13 +27,9 @@ try:
     # Cover any subprocess
     coverage.process_startup()
     try:
-        os.chdir(
-            os.path.join(
-                os.path.dirname(                # tests
-                    os.path.dirname(__file__)   # salt root
-                ), 'salt'                       # salt module
-            )
-        )
+        salt_root = os.path.dirname(os.path.dirname(__file__))
+        if salt_root:
+            os.chdir(salt_root)
     except OSError, err:
         print 'Failed to change directory to salt\'s source: {0}'.format(err)
 
@@ -42,7 +38,9 @@ try:
         branch=True,
         data_file=COVERAGE_FILE,
         source=[os.getcwd()],
+        include=[os.path.join(os.getcwd(), 'salt')]
     )
+    code_coverage.erase()
 except ImportError:
     code_coverage = None
 
@@ -289,6 +287,12 @@ def parse_opts():
         help='Do not generate the coverage HTML report. Will only save '
              'coverage information to the filesystem.'
     )
+    coverage_group.add_option(
+        '--coverage-output',
+        default=os.path.join(tempfile.gettempdir(), 'coverage-report'),
+        help='The coverage report output directory. WARNING: This directory '
+             'WILL be deleted. Default: %default'
+    )
     parser.add_option_group(coverage_group)
 
     vagrant_group = optparse.OptionGroup(
@@ -416,13 +420,13 @@ def stop_coverage(opts):
     if opts.coverage and not opts.no_coverage_report:
         print(
             '\nGenerating Coverage HTML Report Under {0!r} ...'.format(
-                COVERAGE_REPORT
+                opts.coverage_output
             )
         ),
         sys.stdout.flush()
-        if os.path.isdir(COVERAGE_REPORT):
+        if os.path.isdir(opts.coverage_output):
             import shutil
-            shutil.rmtree(COVERAGE_REPORT)
+            shutil.rmtree(opts.coverage_output)
 
         for cname in sorted(glob.glob(COVERAGE_FILE + '*')):
             cname_parts = cname.rsplit('.', 1)
@@ -431,30 +435,37 @@ def stop_coverage(opts):
                 # vagrant machines
                 cname_parts[-1] = 'Starter Machine'
 
-            report_dir = os.path.join(COVERAGE_REPORT, cname_parts[-1])
+            report_dir = os.path.join(opts.coverage_output, cname_parts[-1])
 
             partial_coverage = coverage.coverage(
                 branch=True,
                 data_file=cname,
                 source=[os.getcwd()],
+                include=[os.path.join(os.getcwd(), 'salt')]
             )
             partial_coverage.load()
             partial_coverage.html_report(
-                directory=report_dir, ignore_errors=True
+                directory=report_dir,
+                #ignore_errors=True,
+                #include=[os.path.join(os.getcwd(), 'salt')]
             )
 
         if os.path.exists(COVERAGE_FILE):
-            code_coverage.combine()
+            code_coverage.load()
+            #code_coverage.combine()
             code_coverage.html_report(
-                directory=os.path.join(COVERAGE_REPORT, 'Combined Coverage'),
-                ignore_errors=True
+                directory=os.path.join(
+                    opts.coverage_output, 'Combined Coverage'
+                ),
+                #ignore_errors=True,
+                #include=[os.path.join(os.getcwd(), 'salt', '**')]
             )
         print('Done.\n')
 
 
 if __name__ == '__main__':
     opts = parse_opts()
-    logging.getLogger('salt.tests.runtests').warning('Tests Starting!')
+    logging.getLogger('salt.tests.runtests').warning('Tests Starting! {0}'.format(os.getcwd()))
     if opts.coverage:
         code_coverage.start()
 
