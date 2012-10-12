@@ -290,8 +290,6 @@ class VagrantTestDaemon(TestDaemon):
             #    continue
             self.__machines[dirname] = vg_path
 
-        print self.__machines
-
     def __enter__(self):
         # Run the __enter__ code from TestDaemon
         ret = super(VagrantTestDaemon, self).__enter__()
@@ -495,7 +493,10 @@ class VagrantTestDaemon(TestDaemon):
                             (output['retcode'] > 0 and 'FAILED' or 'PASSED')
                         ), inline=True, centered=True
                     )
-                    print(output['stdout'])
+                    if output['retcode'] > 0:
+                        print output['stderr']
+                    else:
+                        print(output['stdout'])
                     print_header('~', inline=True)
 
             if not running:
