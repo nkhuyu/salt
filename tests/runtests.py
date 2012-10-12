@@ -6,6 +6,7 @@ Discover all instances of unittest.TestCase in this directory.
 # Import python libs
 import sys
 import os
+import glob
 import logging
 import optparse
 import resource
@@ -16,8 +17,10 @@ try:
 except ImportError:
     xmlrunner = None
 
+CWD = os.getcwd()
 TEST_DIR = os.path.dirname(os.path.normpath(os.path.abspath(__file__)))
 COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
+COVERAGE_REPORT = os.path.join(TEST_DIR, 'coverage-report')
 
 try:
     import coverage
@@ -46,10 +49,39 @@ except ImportError:
 
 # Import salt libs
 import saltunittest
-from integration import PNUM, print_header, TestDaemon
+from integration import PNUM, print_header
 
 REQUIRED_OPEN_FILES = 2048
 TEST_RESULTS = []
+
+
+class STDOutWrapper(object):
+    """
+    This wrapper is meant to be used with sys.std{out,err} when the tests
+    are not running on a tty.
+    """
+    logger = 'salt.runtests.stdout'
+
+    def __init__(self, original):
+        self.original = original
+
+    def write(self, data):
+        if isinstance(data, unicode):
+            data = data.encode('utf-8')
+        self.original.write(data)
+        self.original.flush()
+        ldata = data.rstrip()
+        if ldata:
+            logging.getLogger(self.logger).info(ldata)
+
+    def __getattribute__(self, name):
+        if name in ('write', 'logger', 'original'):
+            return object.__getattribute__(self, name)
+        return getattr(self.original, name)
+
+
+class STDErrWrapper(STDOutWrapper):
+    logger = 'salt.runtests.stderr'
 
 
 def run_suite(opts, path, display_name, suffix='[!_]*.py'):
@@ -112,10 +144,17 @@ def run_integration_tests(opts):
 
     print_header('Setting up Salt daemons to execute tests', top=False)
     status = []
-    if not any([opts.client, opts.module, opts.runner,
-                opts.shell, opts.state, opts.name]):
+    if not any([opts.client, opts.module, opts.runner, opts.shell,
+                opts.state, opts.name, opts.vagrant_test]):
         return status
-    with TestDaemon(clean=opts.clean):
+
+    if opts.vagrant_test:
+        # Switch the tests daemon if we'll test within vagrant machines too
+        from integration import VagrantTestDaemon as TestDaemon
+    else:
+        from integration import TestDaemon
+
+    with TestDaemon(opts) as test_daemon:
         if opts.name:
             for name in opts.name:
                 results = run_suite(opts, '', name)
@@ -130,6 +169,8 @@ def run_integration_tests(opts):
             status.append(run_integration_suite(opts, 'client', 'Client'))
         if opts.shell:
             status.append(run_integration_suite(opts, 'shell', 'Shell'))
+        # Local tests finished, enable remote tests progress
+        test_daemon.enable_progress()
     return status
 
 
@@ -250,6 +291,33 @@ def parse_opts():
     )
     parser.add_option_group(coverage_group)
 
+    vagrant_group = optparse.OptionGroup(
+        parser,
+        'Vagrant Machines Testing Options',
+        'These options will start vagrant machines under \'./{0}/\' if not '
+        'running already. In order for a sub-directory under \'./{0}/\' to '
+        'be considered as a vagrant machine, a \'Vagrantfile\', which is '
+        'the vagrant\'s machine configuration file, must exist. If a '
+        '\'Vagrantfile.skip\' exists that machine will be skipped from '
+        'running the tests suite.'.format(
+            os.path.relpath(os.path.join(TEST_DIR, 'vg'), CWD)
+        )
+    )
+    vagrant_group.add_option(
+        '--vagrant-test',
+        default=False,
+        action='store_true',
+        help='Run the test suite within the testing vagrant machines'
+    )
+    vagrant_group.add_option(
+        '--vagrant-no-stop',
+        default=False,
+        action='store_true',
+        help='Do NOT stop the vagrant machines when done running the '
+             'tests suite.'
+    )
+    parser.add_option_group(vagrant_group)
+
     options, _ = parser.parse_args()
 
     if options.xmlout and xmlrunner is None:
@@ -272,9 +340,11 @@ def parse_opts():
                 'to produce incorrect results. Please consider upgrading...'
             )
 
-        if any((options.module, options.client, options.shell, options.unit,
-                options.state, options.runner, options.name,
-                os.geteuid() is not 0, not options.run_destructive)):
+        if not options.vagrant_test and any(
+                        (options.module, options.client, options.shell,
+                         options.unit, options.state, options.runner,
+                         options.name,
+                         os.geteuid() is not 0, not options.run_destructive)):
             parser.error(
                 'No sense in generating the tests coverage report when not '
                 'running the full test suite, including the destructive '
@@ -305,7 +375,7 @@ def parse_opts():
     print_header('Logging tests on {0}'.format(logfile), bottom=False)
 
     # With greater verbosity we can also log to the console
-    if options.verbosity > 2:
+    if options.verbosity > 2 and sys.stdout.isatty():
         consolehandler = logging.StreamHandler(stream=sys.stderr)
         consolehandler.setLevel(logging.INFO)       # -vv
         consolehandler.setFormatter(formatter)
@@ -313,6 +383,14 @@ def parse_opts():
             consolehandler.setLevel(logging.DEBUG)  # -vvv
 
         logging.root.addHandler(consolehandler)
+
+    if not sys.stdout.isatty():
+        # Not running on a tty, log any sys.stdout.write() calls
+        sys.stdout = STDOutWrapper(sys.__stdout__)
+
+    if not sys.stderr.isatty():
+        # Not running on a tty, log any sys.stderr.write() calls
+        sys.stderr = STDErrWrapper(sys.__stderr__)
 
     os.environ['DESTRUCTIVE_TESTS'] = str(options.run_destructive)
 
@@ -336,24 +414,47 @@ def stop_coverage(opts):
         code_coverage.save()
 
     if opts.coverage and not opts.no_coverage_report:
-        code_coverage.combine()
-        report_dir = os.path.join(os.path.dirname(__file__), 'coverage-report')
         print(
             '\nGenerating Coverage HTML Report Under {0!r} ...'.format(
-                report_dir
+                COVERAGE_REPORT
             )
         ),
         sys.stdout.flush()
-
-        if os.path.isdir(report_dir):
+        if os.path.isdir(COVERAGE_REPORT):
             import shutil
-            shutil.rmtree(report_dir)
-        code_coverage.html_report(directory=report_dir)
+            shutil.rmtree(COVERAGE_REPORT)
+
+        for cname in sorted(glob.glob(COVERAGE_FILE + '*')):
+            cname_parts = cname.rsplit('.', 1)
+            if cname_parts[-1] == 'coverage':
+                # This is the test suite which gathers info from all running
+                # vagrant machines
+                cname_parts[-1] = 'Starter Machine'
+
+            report_dir = os.path.join(COVERAGE_REPORT, cname_parts[-1])
+
+            partial_coverage = coverage.coverage(
+                branch=True,
+                data_file=cname,
+                source=[os.getcwd()],
+            )
+            partial_coverage.load()
+            partial_coverage.html_report(
+                directory=report_dir, ignore_errors=True
+            )
+
+        if os.path.exists(COVERAGE_FILE):
+            code_coverage.combine()
+            code_coverage.html_report(
+                directory=os.path.join(COVERAGE_REPORT, 'Combined Coverage'),
+                ignore_errors=True
+            )
         print('Done.\n')
 
 
 if __name__ == '__main__':
     opts = parse_opts()
+    logging.getLogger('salt.tests.runtests').warning('Tests Starting!')
     if opts.coverage:
         code_coverage.start()
 

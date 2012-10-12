@@ -10,6 +10,7 @@ import sys
 import shutil
 import subprocess
 import tempfile
+import time
 try:
     import pwd
 except ImportError:
@@ -35,7 +36,7 @@ PYEXEC = 'python{0}.{1}'.format(sys.version_info[0], sys.version_info[1])
 TMP = os.path.join(tempfile.gettempdir(), 'salt-tests-tmpdir')
 FILES = os.path.join(INTEGRATION_TEST_DIR, 'files')
 MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
-
+COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 
 try:
     import console
@@ -115,8 +116,8 @@ class TestDaemon(object):
     Set up the master and minion daemons, and run related cases
     '''
 
-    def __init__(self, clean):
-        self.clean = clean
+    def __init__(self, opts):
+        self.opts = opts
 
     def __enter__(self):
         '''
@@ -212,7 +213,6 @@ class TestDaemon(object):
         syndic = salt.minion.Syndic(self.syndic_opts)
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
-
         return self
 
     def __exit__(self, type, value, traceback):
@@ -226,6 +226,10 @@ class TestDaemon(object):
         self.smaster_process.terminate()
         self._exit_mockbin()
         self._clean()
+
+    def enable_progress(self):
+        # overridden in the VagrantTestDaemon
+        pass
 
     def _enter_mockbin(self):
         path = os.environ.get('PATH', '')
@@ -247,7 +251,7 @@ class TestDaemon(object):
         '''
         Clean out the tmp files
         '''
-        if not self.clean:
+        if self.opts.clean is False:
             return
         if os.path.isdir(self.sub_minion_opts['root_dir']):
             shutil.rmtree(self.sub_minion_opts['root_dir'])
@@ -257,6 +261,356 @@ class TestDaemon(object):
             shutil.rmtree(self.smaster_opts['root_dir'])
         if os.path.isdir(TMP):
             shutil.rmtree(TMP)
+
+
+class VagrantMachineException(Exception): pass
+
+
+class VagrantTestDaemon(TestDaemon):
+    def __init__(self, opts):
+        super(VagrantTestDaemon, self).__init__(opts)
+        # Setup some events
+        self.__evt_started = multiprocessing.Event()
+        self.__evt_finished = multiprocessing.Event()
+        self.__evt_shutdown = multiprocessing.Event()
+        self.__evt_progress = multiprocessing.Event()
+        self.__rvmrc_source = None
+
+        # Gather the machines we're able to start ourselves
+        self.__machines = {}
+        vg_base_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), 'vg'
+        )
+        for dirname in os.listdir(vg_base_path):
+            vg_path = os.path.join(vg_base_path, dirname)
+            vagrantfile = os.path.join(vg_path, 'Vagrantfile')
+            if not os.path.isfile(vagrantfile):
+                continue
+            #elif os.path.isfile('{0}.skip'.format(vagrantfile)):
+            #    continue
+            self.__machines[dirname] = vg_path
+
+        print self.__machines
+
+    def __enter__(self):
+        # Run the __enter__ code from TestDaemon
+        ret = super(VagrantTestDaemon, self).__enter__()
+        # The test daemon should be running now, let's setup the vagrant
+        # testing salt client required to communicate with the salt minions
+        # within our vagrant machines.
+        self.__client = salt.client.LocalClient(
+            os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
+        )
+        # Wait for the vagrant stuff to start before returning the code
+        # execution back
+        # Start the vagrant machines
+        self.__start_machines()
+        self.__evt_started.wait()
+        return ret
+
+    def __exit__(self, type, value, traceback):
+        # Let's handle the vagrant stuff before running the TestDaemon.__exit__
+        # code. Wait for the tests to complete.
+        self.__evt_finished.wait()
+        # Stop the machines
+        self.__stop_machines()
+        # Wait for the shutdown code to execute
+        self.__evt_shutdown.wait()
+        return super(VagrantTestDaemon, self).__exit__(
+            type, value, traceback
+        )
+
+    def enable_progress(self):
+        print
+        print_header('', sep='=', inline=True)
+        self.__evt_progress.set()
+
+    def __start_machines(self):
+        for machine, vg_path in self.__machines.copy().iteritems():
+            header = '  Starting {0} Machine  '.format(machine)
+            vagrant_skip = os.path.join(vg_path, 'Vagrantfile.skip')
+            if os.path.exists(vagrant_skip):
+                header += '~  SKIPPED  '
+            print_header(header, centered=True, inline=True)
+            if os.path.exists(vagrant_skip):
+                self.__machines.pop(machine)
+                continue
+            try:
+                self.__start_machine(vg_path)
+            except VagrantMachineException:
+                print('  * Failed to start machine: {0}'.format(machine))
+                self.__machines.pop(machine)
+            print_header('~', inline=True)
+            time.sleep(0.2)
+        self.__run_tests()
+
+    def __start_machine(self, machine_path):
+        if self.__rvmrc_source is None:
+            # Let's check if we need to source .rvmrc
+            popen = subprocess.Popen(
+                ['vagrant', '--help'], cwd=machine_path,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            popen.wait()
+            self.__rvmrc_source = popen.returncode > 0
+
+        cmd = 'vagrant up'
+        executable = '/bin/sh'
+
+        if self.__rvmrc_source is True:
+            cmd = 'source .rvmrc && {0}'.format(cmd)
+            executable = '/bin/bash'
+
+        popen = subprocess.Popen(
+            cmd, cwd=machine_path, shell=True, executable=executable
+        )
+        popen.wait()
+        if popen.returncode > 0:
+            raise VagrantMachineException()
+
+    def __run_tests(self):
+        self.__tests_process = multiprocessing.Process(
+            target=self.__run_tests_target,
+            args=(self.__evt_started, self.__evt_finished, self.__evt_progress)
+        )
+        self.__tests_process.start()
+
+    def __run_tests_target(self, start_evt, finish_evt, progress_evt):
+        sleep = 120
+        print_header(
+            'Waiting at most {0} secs for minions to connect '
+            'back'.format(sleep), sep='=', centered=True
+        )
+        expected_connection = set(self.__machines.keys())
+        while sleep > 0:
+            targets = filter(
+                lambda x: x not in ('minion', 'sub_minion'),
+                self.__client.cmd('*', 'test.ping')
+            )
+            for target in targets:
+                if target not in expected_connection:
+                    continue
+                print('\n  * {0} minion connected'.format(target))
+                expected_connection.remove(target)
+
+            if not expected_connection:
+                time.sleep(1)
+                break
+            time.sleep(1)
+            sleep -= 1
+        else:
+            if expected_connection:
+                print(
+                    '  * Failed to get a connection back from: {0}'.format(
+                        ', '.join(expected_connection)
+                    )
+                )
+
+        if not targets:
+            print_header(
+                'There aren\'t any minions running to run remote tests '
+                'against', sep='=', centered=True
+            )
+
+            start_evt.set()
+            finish_evt.set()
+            return
+
+        print_header('=', sep='=', inline=True)
+        start_evt.set()
+
+        running = set(targets)
+
+        time.sleep(1)
+
+        run_tests_kwargs = dict(
+            clean=True,
+            #no_clean=True,
+            coverage=True,
+            run_destructive=True,
+            no_coverage_report=True,
+            verbose=2,
+            #unit=True,
+            #shell=True,
+            #module=True,
+            #states=True,
+            pnum=PNUM
+        )
+        run_tests_arg = [
+            '{0}={1}'.format(k, v) for (k, v) in run_tests_kwargs.iteritems()
+        ]
+        jid_info = self.__client.run_job(
+            ','.join(targets), 'runtests.run_tests',
+            expr_form='list',
+            cwd='/tmp',
+            #verbose=True,
+            timeout=9999999999999999,
+            arg=run_tests_arg
+        )
+
+        data = {}
+        steps = 3
+        print
+        sys.stdout.write(
+            '  * Waiting for test results from {0} '.format(
+                ', '.join(running)
+            )
+        )
+
+        if not progress_evt.is_set():
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+
+        #iterations = 10
+        while running:
+            #if iterations <= 0:
+            #    data = self.__client.gather_job_info(
+            #        jid_info['jid'], '*', 'glob'
+            #    )
+            #    print 12345, data
+            #    iterations = 10
+            #iterations -= 1
+
+            rdata = self.__client.get_returns(jid_info['jid'], targets, 1)
+            if rdata:
+                for name, output in rdata.iteritems():
+                    if name in ('minion', 'sub_minion'):
+                        continue
+                    # Got back the test results from the minion.
+                    # It's no longer running tests
+                    running.remove(name)
+
+                    # Returned data is expected to be a dictionary, if it's
+                    # not, the something wrong happened
+                    if not isinstance(output, dict):
+                        print('\n  * An error occurred on {0}: {1}'.format(
+                            name, output
+                        ))
+                        continue
+
+                    print
+                    print_header(
+                        '  {0} ~ Remote Test Results ~ {1}  '.format(
+                            name,
+                            (output['retcode'] > 0 and 'FAILED' or 'PASSED')
+                        ), inline=True, centered=True
+                    )
+                    print(output['stdout'])
+                    print_header('~', inline=True)
+
+            if not running:
+                # All remote tests have finished. Exit the loop
+                print
+                print_header('', sep='=', inline=True)
+                break
+
+            elif steps <= 0:
+                # We're still waiting for results from the remote vagrant
+                # minions running the test suite.
+                steps = 3
+                if progress_evt.is_set():
+                    sys.stdout.write('\r' + ' ' * PNUM + '\r')
+                    sys.stdout.write(
+                        '  * Waiting for test results from {0} '.format(
+                            ', '.join(running)
+                        )
+                    )
+            else:
+                steps -= 1
+                if progress_evt.is_set():
+                    sys.stdout.write('.')
+            sys.stdout.flush()
+
+        # All finished, gather coverage data back from the vagrant minions
+        coverage_data = self.__client.cmd(
+            ','.join(targets),
+            'runtests.get_coverage',
+            ret='raw',
+            cwd="/tmp",
+            expr_form='list'
+        )
+
+        if coverage_data:
+            print_header(
+                '  Checking for remote coverage data  ',
+                sep='=', centered=True, bottom=False
+            )
+            idx = 1
+            for name, data in coverage_data.iteritems():
+                if name in ('minion', 'sub_minion'):
+                    continue
+                if not isinstance(data, dict):
+                    print('  * An error occurred on {0}: {1}'.format(
+                        name, output
+                    ))
+                    continue
+                if not data:
+                    # No coverage data was created
+                    continue
+                print('  * Saving remote coverage data from {0}'.format(name))
+                import cPickle
+                cPickle.dump(
+                    self.__switch_remote_to_local_paths(data),
+                    open('{0}.{1}'.format(COVERAGE_FILE, name), 'wb+')
+                )
+                idx += 1
+            print_header('', sep='=', inline=True)
+
+        # Let's signal anyone waiting for the event that we're done
+        finish_evt.set()
+
+    def __switch_remote_to_local_paths(self, remote_data):
+        local_path = os.getcwd()
+        remote_path = '/salt/source/'
+        converted = {}
+
+        def traverse(chunk):
+            d = {}
+            for key, data in chunk.iteritems():
+                if isinstance(key, basestring) and key.startswith(remote_path):
+                    key = os.path.join(
+                        local_path, key.split(remote_path, 1)[-1]
+                    )
+                d[key] = data
+            return d
+
+        for key, data in remote_data.iteritems():
+            if isinstance(data, dict):
+                data = traverse(data)
+            converted[key] = data
+
+        return converted
+
+    def __stop_machines(self):
+        if self.opts.vagrant_no_stop:
+            self.__evt_shutdown.set()
+            return
+
+        for machine, vg_path in self.__machines.iteritems():
+            header = '  Stopping {0} Machine  '.format(machine)
+            print_header(header, centered=True, inline=True)
+            try:
+                self.__stop_machine(vg_path)
+            except VagrantMachineException:
+                print('  * Failed to stop machine: {0}'.format(machine))
+            print_header('', sep='=', inline=True)
+
+        self.__evt_shutdown.set()
+
+    def __stop_machine(self, machine_path):
+        cmd = 'vagrant destroy --force'
+        executable = '/bin/sh'
+
+        if self.__rvmrc_source is True:
+            cmd = 'source .rvmrc && {0}'.format(cmd)
+            executable = '/bin/bash'
+
+        popen = subprocess.Popen(
+            cmd, cwd=machine_path, shell=True, executable=executable
+        )
+        popen.wait()
+        if popen.returncode > 0:
+            raise VagrantMachineException()
 
 
 class ModuleCase(TestCase):
@@ -498,3 +852,6 @@ class ShellCaseCommonTestsMixIn(object):
         out = '\n'.join(self.run_script(self._call_binary_, "--version"))
         self.assertIn(self._call_binary_, out)
         self.assertIn(salt.__version__, out)
+
+# sudo kill -KILL $(ps aux | grep python | grep "runtests" | awk '{print $2}')
+# CMD=""; PIDS=$(ps aux | grep python | grep -E -w "runtests|salt-m" | awk '{print $2}'); for p in $PIDS; do CMD="$CMD -p $p"; done; eval "sudo strace -f -e trace=write -e verbose=none -e write=1,2 -q $CMD"
