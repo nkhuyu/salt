@@ -18,6 +18,7 @@ except ImportError:
     xmlrunner = None
 
 CWD = os.getcwd()
+LOGFILE = os.path.join(tempfile.gettempdir(), 'salt-runtests.log')
 TEST_DIR = os.path.dirname(os.path.normpath(os.path.abspath(__file__)))
 COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 COVERAGE_REPORT = os.path.join(TEST_DIR, 'coverage-report')
@@ -96,13 +97,21 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     print_header('Starting {0}'.format(header))
 
     if opts.xmlout:
-        runner = xmlrunner.XMLTestRunner(output='test-reports').run(tests)
+        runner = xmlrunner.XMLTestRunner(
+            output='test-reports',
+            stream=sys.stdin.isatty() and sys.stdout or sys.stderr
+        )
+        # XMLTestRunner only accepts True/False for verbosity although it
+        # subclasses TextTestRunner. Force it to handle verbosity the same way
+        runner.verbosity = opts.verbosity
     else:
         runner = saltunittest.TextTestRunner(
-            verbosity=opts.verbosity
-        ).run(tests)
-        TEST_RESULTS.append((header, runner))
-    return runner.wasSuccessful()
+            verbosity=opts.verbosity,
+            stream=sys.stdin.isatty() and sys.stdout or sys.stderr
+        )
+    results = runner.run(tests)
+    TEST_RESULTS.append((header, results))
+    return results.wasSuccessful()
 
 
 def run_integration_suite(opts, suite_folder, display_name):
@@ -327,6 +336,10 @@ def parse_opts():
     if options.xmlout and xmlrunner is None:
         parser.error('\'--xml\' is not available. The xmlrunner library '
                      'is not installed.')
+    elif options.xmlout:
+        # With --xml I've segfaulted using 2048, so, let's double that
+        global REQUIRED_OPEN_FILES
+        REQUIRED_OPEN_FILES = 4096
 
     if options.coverage and code_coverage is None:
         parser.error(
@@ -369,17 +382,15 @@ def parse_opts():
     logfile = os.path.join(tempfile.gettempdir(), 'salt-runtests.log')
     filehandler = logging.FileHandler(
         mode='w',           # Not preserved between re-runs
-        filename=logfile
+        filename=LOGFILE
     )
     filehandler.setLevel(logging.DEBUG)
     filehandler.setFormatter(formatter)
     logging.root.addHandler(filehandler)
     logging.root.setLevel(logging.DEBUG)
 
-    print_header('Logging tests on {0}'.format(logfile), bottom=False)
-
     # With greater verbosity we can also log to the console
-    if options.verbosity > 2 and sys.stdout.isatty():
+    if options.verbosity > 2 and sys.stdin.isatty():
         consolehandler = logging.StreamHandler(stream=sys.stderr)
         consolehandler.setLevel(logging.INFO)       # -vv
         consolehandler.setFormatter(formatter)
@@ -388,12 +399,9 @@ def parse_opts():
 
         logging.root.addHandler(consolehandler)
 
-    if not sys.stdout.isatty():
-        # Not running on a tty, log any sys.stdout.write() calls
+    if not sys.stdin.isatty():
+        # Not running on a tty, log any sys.std[out,err].write() calls
         sys.stdout = STDOutWrapper(sys.__stdout__)
-
-    if not sys.stderr.isatty():
-        # Not running on a tty, log any sys.stderr.write() calls
         sys.stderr = STDErrWrapper(sys.__stderr__)
 
     os.environ['DESTRUCTIVE_TESTS'] = str(options.run_destructive)
@@ -413,13 +421,16 @@ def parse_opts():
 
 def stop_coverage(opts):
     if opts.coverage:
-        print('Stopping and saving coverage info')
+        print_header(
+            '  Stopping and saving coverage info  ',
+            sep='=', inline=True, centered=True
+        )
         code_coverage.stop()
         code_coverage.save()
 
     if opts.coverage and not opts.no_coverage_report:
         print(
-            '\nGenerating Coverage HTML Report Under {0!r} ...'.format(
+            '\n  * Generating Coverage HTML Report Under {0!r} ...'.format(
                 opts.coverage_output
             )
         ),
@@ -434,6 +445,12 @@ def stop_coverage(opts):
                 # This is the test suite which gathers info from all running
                 # vagrant machines
                 cname_parts[-1] = 'Starter Machine'
+
+            print(
+                '  * Generating coverage report for {0}'.format(
+                    cname_parts[-1]
+                )
+            )
 
             report_dir = os.path.join(opts.coverage_output, cname_parts[-1])
 
@@ -451,6 +468,8 @@ def stop_coverage(opts):
             )
 
         if os.path.exists(COVERAGE_FILE):
+            print('  * Generating the combined coverage report')
+
             code_coverage.load()
             #code_coverage.combine()
             code_coverage.html_report(
@@ -460,12 +479,17 @@ def stop_coverage(opts):
                 #ignore_errors=True,
                 #include=[os.path.join(os.getcwd(), 'salt', '**')]
             )
-        print('Done.\n')
+        print('  * Done.')
+        print_header('', sep='=')
 
 
 if __name__ == '__main__':
     opts = parse_opts()
-    logging.getLogger('salt.tests.runtests').warning('Tests Starting! {0}'.format(os.getcwd()))
+
+    print_header('Tests Starting!', bottom=False)
+    print('Logging tests on {0}'.format(LOGFILE))
+    print('Current directory: {0}'.format(os.getcwd()))
+
     if opts.coverage:
         code_coverage.start()
 
@@ -479,7 +503,7 @@ if __name__ == '__main__':
     if opts.no_report:
         # Stop coverage and generate report
         stop_coverage(opts)
-        logging.getLogger('salt.tests.runtests').warning('Tests Finished!')
+        print_header('Tests Finished!')
 
         if false_count > 0:
             sys.exit(1)
@@ -550,7 +574,8 @@ if __name__ == '__main__':
 
     # Stop coverage and generate report
     stop_coverage(opts)
-    logging.getLogger('salt.tests.runtests').warning('Tests Finished!')
+
+    print_header('Tests Finished!', top=False)
 
     if false_count > 0:
         sys.exit(1)
