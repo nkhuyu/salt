@@ -22,6 +22,7 @@ import salt.config
 import salt.master
 import salt.minion
 import salt.runner
+from salt.utils import get_colors
 from salt.utils.verify import verify_env
 from saltunittest import TestCase
 
@@ -214,7 +215,7 @@ class TestDaemon(object):
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
 
-        self.__client = salt.client.LocalClient(
+        self.client = salt.client.LocalClient(
             os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
         )
 
@@ -233,15 +234,22 @@ class TestDaemon(object):
         self._clean()
 
     def query_running_vagrant_minions(self):
-        # Sleep a little bit to allow minions to connect back
-        time.sleep(2)
-        # Let's get the minions who are responding back
-        targets = filter(
-            lambda x: x not in ('minion', 'sub_minion'),
-            self.__client.cmd('*', 'test.ping')
-        )
-        if targets:
-            os.environ['SALT_VG_MACHINES'] = '|'.join(targets)
+        # Allow some time for minions to connect back
+        sleep = 10
+        while sleep > 0:
+            # Let's get the minions who are responding back
+            targets = self.client.cmd('*', 'test.ping')
+            if 'minion' in targets and 'sub_minion' in targets:
+                # We need at least minion and sub_minion
+                os.environ['SALT_VG_MACHINES'] = '|'.join(
+                    sorted([
+                        name for (name, running) in targets.iteritems()
+                        if running is True
+                    ])
+                )
+                break
+            time.sleep(1)
+            sleep -= 1
 
     def enable_progress(self):
         # overridden in the VagrantTestDaemon
@@ -302,8 +310,6 @@ class VagrantTestDaemon(TestDaemon):
             vagrantfile = os.path.join(vg_path, 'Vagrantfile')
             if not os.path.isfile(vagrantfile):
                 continue
-            #elif os.path.isfile('{0}.skip'.format(vagrantfile)):
-            #    continue
             self.__machines[dirname] = vg_path
 
     def __enter__(self):
@@ -387,18 +393,18 @@ class VagrantTestDaemon(TestDaemon):
         self.__tests_process.start()
 
     def __run_tests_target(self, start_evt, finish_evt, progress_evt):
-        sleep = 120
+        sleep = 60
         print_header(
             'Waiting at most {0} secs for minions to connect '
             'back'.format(sleep), sep='=', centered=True
         )
         expected_connection = set(self.__machines.keys())
         while sleep > 0:
-            targets = [
-                minion for minion in
-                os.environ.get('SALT_VG_MACHINES', '').split('|')
-                if minion
-            ]
+            # Let's get the minions who are responding back
+            targets = filter(
+                lambda x: x not in ('minion', 'sub_minion'),
+                self.client.cmd('*', 'test.ping')
+            )
             for target in targets:
                 if target not in expected_connection:
                     continue
@@ -454,7 +460,7 @@ class VagrantTestDaemon(TestDaemon):
         run_tests_arg = [
             '{0}={1}'.format(k, v) for (k, v) in run_tests_kwargs.iteritems()
         ]
-        jid_info = self.__client.run_job(
+        jid_info = self.client.run_job(
             ','.join(targets), 'runtests.run_tests',
             expr_form='list',
             cwd='/tmp',
@@ -486,9 +492,9 @@ class VagrantTestDaemon(TestDaemon):
             #    iterations = 10
             #iterations -= 1
 
-            rdata = self.__client.get_returns(jid_info['jid'], targets, 1)
+            rdata = self.client.get_returns(jid_info['jid'], targets, 1)
             if rdata:
-                for name, output in rdata.iteritems():
+                for idx, (name, output) in enumerate(rdata.iteritems()):
                     if name in ('minion', 'sub_minion'):
                         continue
                     # Got back the test results from the minion.
@@ -504,6 +510,8 @@ class VagrantTestDaemon(TestDaemon):
                         continue
 
                     print
+                    if idx+1 % 2:
+                        print(get_colors(True)['LIGHT_BLUE'])
                     print_header(
                         '  {0} ~ Remote Test Results ~ {1}  '.format(
                             name,
@@ -511,10 +519,12 @@ class VagrantTestDaemon(TestDaemon):
                         ), inline=True, centered=True
                     )
                     if output['retcode'] > 0:
-                        print output['stderr']
-                    else:
-                        print(output['stdout'])
+                        print(output['stderr'])
+                    print(output['stdout'])
+
                     print_header('~', inline=True)
+                    if idx+1 % 2:
+                        print(get_colors(True)['ENDC'])
 
             if not running:
                 # All remote tests have finished. Exit the loop
@@ -540,7 +550,7 @@ class VagrantTestDaemon(TestDaemon):
             sys.stdout.flush()
 
         # All finished, gather coverage data back from the vagrant minions
-        coverage_data = self.__client.cmd(
+        coverage_data = self.client.cmd(
             ','.join(targets),
             'runtests.get_coverage',
             ret='raw',
