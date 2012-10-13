@@ -74,7 +74,7 @@ class PathJoinTestCase(TestCase):
     def test_windows_paths_patched_path_module(self):
         if platform.system().lower() == "windows":
             self.skipTest(
-                'Windows platform found. not running patched os.path '
+                'Windows platform found. Not running patched os.path '
                 'path_join tests'
             )
 
