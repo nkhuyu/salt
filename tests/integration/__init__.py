@@ -321,6 +321,9 @@ class VagrantTestDaemon(TestDaemon):
     def enable_progress(self):
         print
         print_header('', sep='=', inline=True)
+        if not self.__evt_finished.is_set():
+            sys.stdout.write('  * Waiting for test results from ...')
+            sys.stdout.flush()
         self.__evt_progress.set()
 
     def __start_machines(self):
@@ -427,13 +430,15 @@ class VagrantTestDaemon(TestDaemon):
             coverage=True,
             run_destructive=True,
             no_coverage_report=True,
-            verbose=2,
+            verbose=self.opts.verbosity,
             #unit=True,
             #shell=True,
             #module=True,
             #states=True,
-            pnum=PNUM
+            pnum=PNUM,
+            xml = self.opts.xmlout
         )
+
         run_tests_arg = [
             '{0}={1}'.format(k, v) for (k, v) in run_tests_kwargs.iteritems()
         ]
