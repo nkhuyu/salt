@@ -14,6 +14,9 @@ python-virtualenv:
 python-dev:
   pkg.installed
 
+python-xmlrunner:
+  pkg.installed
+
 /tmp/ve:
   virtualenv.manage:
     - runas: vagrant
@@ -56,22 +59,3 @@ salt-minion:
   service:
     - mod_watch
     - full_restart: True
-
-#libjs-jquery:
-#  pkg.installed
-
-#libjs-jquery-tablesorter:
-#  pkg.installed
-
-#js-copy-instead-of-symlink:
-#  cmd.run:
-#    - cwd: /usr/lib/python2.7/dist-packages/coverage
-#    - name: find /usr/lib/python2.7/dist-packages/coverage/ -name '*.py' -exec sudo sed -i 's/os.symlink/shutil.copyfile/g' '{}' \;
-#    - require:
-#      - pkg: python-coverage
-
-
-#runtests:
-#  cmd.run:
-#    - cwd: /salt/source/
-#    - name: sudo python tests/runtests.py -vv
