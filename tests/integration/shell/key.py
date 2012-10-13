@@ -19,9 +19,9 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
 
     def setUp(self):
         super(KeyTest, self).setUp()
-        self.minions = ['minion', 'sub_minion']
-        self.vg_machines = os.environ.get('SALT_VG_MACHINES', '').split('|')
-        self.all_minions = self.minions + [m for m in self.vg_machines if m]
+        self.all_minions = [
+            m for m in os.environ.get('SALT_VG_MACHINES', '').split('|') if m
+        ]
 
     def test_list(self):
         '''

@@ -112,13 +112,13 @@ class Key(object):
         '''
         List the unaccepted keys
         '''
-        if header == True:
+        if header is True:
             self._log('{0}Unaccepted Keys:{1}'.format(
                 self.colors['LIGHT_RED'], self.colors['ENDC']
                 ))
-        keys = self._keys('pre')
+        keys = sorted(self._keys('pre'))
         if printer is None:
-            for key in sorted(keys):
+            for key in keys:
                 output = '{0}{1}{2}'.format(
                         self.colors['RED'],
                         key,
@@ -126,41 +126,41 @@ class Key(object):
                         )
                 self._log(output)
         else:
-            printer(list(keys))
+            printer(keys)
 
     def _list_accepted(self, header=True, printer=None):
         '''
         List the accepted public keys
         '''
-        if header == True:
+        if header is True:
             self._log('{0}Accepted Keys:{1}'.format(
                 self.colors['LIGHT_GREEN'], self.colors['ENDC']
                 ))
-        keys = self._keys('acc')
+        keys = sorted(self._keys('acc'))
         if printer is None:
-            for key in sorted(keys):
+            for key in keys:
                 self._log('{0}{1}{2}'.format(
                     self.colors['GREEN'], key, self.colors['ENDC']
                     ))
         else:
-            printer(list(keys))
+            printer(keys)
 
     def _list_rejected(self, header=True, printer=None):
         '''
         List the unaccepted keys
         '''
-        if header == True:
+        if header is True:
             self._log('{0}Rejected:{1}'.format(
                 self.colors['LIGHT_BLUE'], self.colors['ENDC']
                 ))
-        keys = self._keys('rej')
+        keys = sorted(self._keys('rej'))
         if printer is None:
-            for key in sorted(keys):
+            for key in keys:
                 self._log('{0}{1}{2}'.format(
                     self.colors['BLUE'], key, self.colors['ENDC']
                     ))
         else:
-            printer(list(keys))
+            printer(keys)
 
     def _list(self, name):
         '''
@@ -180,9 +180,9 @@ class Key(object):
         elif name in ('all',):
             if printout is not None:
                 keys = {
-                    'rejected': list(self._keys('rej')),
-                    'accepted': list(self._keys('acc')),
-                    'unaccepted': list(self._keys('pre')),
+                    'rejected': sorted(self._keys('rej')),
+                    'accepted': sorted(self._keys('acc')),
+                    'unaccepted': sorted(self._keys('pre')),
                 }
                 printout(keys)
             else:
