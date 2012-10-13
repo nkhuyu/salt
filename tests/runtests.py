@@ -51,6 +51,7 @@ except ImportError:
 import saltunittest
 from integration import PNUM, print_header
 
+
 REQUIRED_OPEN_FILES = 2048
 TEST_RESULTS = []
 
@@ -100,7 +101,7 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     if opts.xmlout:
         runner = xmlrunner.XMLTestRunner(
             output='test-reports',
-            stream=sys.stdin.isatty() and sys.stdout or sys.stderr
+            stream=sys.stdin.isatty() and sys.stderr or sys.stdout
         )
         # XMLTestRunner only accepts True/False for verbosity although it
         # subclasses TextTestRunner. Force it to handle verbosity the same way
@@ -108,7 +109,7 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     else:
         runner = saltunittest.TextTestRunner(
             verbosity=opts.verbosity,
-            stream=sys.stdin.isatty() and sys.stdout or sys.stderr
+            stream=sys.stdin.isatty() and sys.stderr or sys.stdout
         )
     results = runner.run(tests)
     TEST_RESULTS.append((header, results))
