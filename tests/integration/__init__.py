@@ -213,6 +213,11 @@ class TestDaemon(object):
         syndic = salt.minion.Syndic(self.syndic_opts)
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
+
+        self.__client = salt.client.LocalClient(
+            os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
+        )
+
         return self
 
     def __exit__(self, type, value, traceback):
@@ -226,6 +231,17 @@ class TestDaemon(object):
         self.smaster_process.terminate()
         self._exit_mockbin()
         self._clean()
+
+    def query_running_vagrant_minions(self):
+        # Sleep a little bit to allow minions to connect back
+        time.sleep(2)
+        # Let's get the minions who are responding back
+        targets = filter(
+            lambda x: x not in ('minion', 'sub_minion'),
+            self.__client.cmd('*', 'test.ping')
+        )
+        if targets:
+            os.environ['SALT_VG_MACHINES'] = '|'.join(targets)
 
     def enable_progress(self):
         # overridden in the VagrantTestDaemon
@@ -293,12 +309,6 @@ class VagrantTestDaemon(TestDaemon):
     def __enter__(self):
         # Run the __enter__ code from TestDaemon
         ret = super(VagrantTestDaemon, self).__enter__()
-        # The test daemon should be running now, let's setup the vagrant
-        # testing salt client required to communicate with the salt minions
-        # within our vagrant machines.
-        self.__client = salt.client.LocalClient(
-            os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
-        )
         # Wait for the vagrant stuff to start before returning the code
         # execution back
         # Start the vagrant machines
@@ -384,10 +394,11 @@ class VagrantTestDaemon(TestDaemon):
         )
         expected_connection = set(self.__machines.keys())
         while sleep > 0:
-            targets = filter(
-                lambda x: x not in ('minion', 'sub_minion'),
-                self.__client.cmd('*', 'test.ping')
-            )
+            targets = [
+                minion for minion in
+                os.environ.get('SALT_VG_MACHINES', '').split('|')
+                if minion
+            ]
             for target in targets:
                 if target not in expected_connection:
                     continue

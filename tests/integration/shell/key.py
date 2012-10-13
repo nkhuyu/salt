@@ -1,4 +1,5 @@
 # Import python libs
+import os
 import sys
 import shutil
 import tempfile
@@ -16,6 +17,12 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
 
     _call_binary_ = 'salt-key'
 
+    def setUp(self):
+        super(KeyTest, self).setUp()
+        self.minions = ['minion', 'sub_minion']
+        self.vg_machines = os.environ.get('SALT_VG_MACHINES', '').split('|')
+        self.all_minions = self.minions + [m for m in self.vg_machines if m]
+
     def test_list(self):
         '''
         test salt-key -L
@@ -24,8 +31,7 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         expect = [
                 'Unaccepted Keys:',
                 'Accepted Keys:',
-                'minion',
-                'sub_minion',
+                ] + sorted(self.all_minions) + [
                 'Rejected:', '']
         self.assertEqual(data, expect)
 
@@ -35,7 +41,9 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L --json-out')
         expect = [
-            '{"unaccepted": [], "accepted": ["minion", "sub_minion"], "rejected": []}',
+            '{"unaccepted": [], "accepted": [' +
+            ', '.join(['"{0}"'.format(m) for m in self.all_minions]) +
+            '], "rejected": []}',
             ''
             ]
         self.assertEqual(data, expect)
@@ -46,7 +54,7 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L --yaml-out')
         expect = [
-            'accepted: [minion, sub_minion]',
+            'accepted: [{0}]'.format(', '.join(self.all_minions)),
             'rejected: []',
             'unaccepted: []',
             '',
@@ -60,8 +68,9 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L --raw-out')
         expect = [
-            "{'unaccepted': [], 'accepted': ['minion', "
-            "'sub_minion'], 'rejected': []}",
+            "{'unaccepted': [], 'accepted': [" +
+            ', '.join([repr(m) for m in self.all_minions]) +
+            "], 'rejected': []}",
             ''
         ]
         self.assertEqual(data, expect)
@@ -72,13 +81,9 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-l acc')
         self.assertEqual(
-                data,
-                [
-                    'minion',
-                    'sub_minion',
-                    ''
-                    ]
-                )
+            data,
+            sorted(self.all_minions) + ['']
+        )
 
     def test_list_un(self):
         '''

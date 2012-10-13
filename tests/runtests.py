@@ -163,6 +163,9 @@ def run_integration_tests(opts):
         from integration import TestDaemon
 
     with TestDaemon(opts) as test_daemon:
+        # Let's store in the environment the running minions used in tests
+        test_daemon.query_running_vagrant_minions()
+
         if opts.name:
             for name in opts.name:
                 results = run_suite(opts, '', name)
