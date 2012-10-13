@@ -96,7 +96,9 @@ def run_tests(module=False, state=False, client=False, shell=False,
         arg.append('--coverage-output={0}'.format(coverage_output))
 
     env = dict(COLUMNS=str(pnum), PNUM=str(pnum))
-    cmd = '{0} {1} {2}'.format(python_bin, runtests_bin, ' '.join(arg))
+    cmd = 'COLUMNS={0} {1} {2} {3}'.format(
+        pnum, python_bin, runtests_bin, ' '.join(arg)
+    )
     log.info('Running command {0!r}'.format(cmd))
     return __salt__['cmd.run_all'](cmd, cwd='/tmp', runas='root', env=env)
 
