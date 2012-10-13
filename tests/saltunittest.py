@@ -18,7 +18,7 @@ if sys.version_info[0:2] < (2, 7):
         from unittest2 import (
             TestLoader,
             TextTestRunner,
-            TestCase,
+            TestCase as OTestCase,
             expectedFailure,
             TestSuite,
             skipIf,
@@ -29,7 +29,7 @@ else:
     from unittest import (
         TestLoader,
         TextTestRunner,
-        TestCase,
+        TestCase as OTestCase,
         expectedFailure,
         TestSuite,
         skipIf,
@@ -43,6 +43,29 @@ SALT_LIBS = os.path.dirname(TEST_DIR)
 for dir_ in [TEST_DIR, SALT_LIBS]:
     if not dir_ in sys.path:
         sys.path.insert(0, dir_)
+
+
+class TestCase(OTestCase):
+    def setUp(self):
+        # tearDown will restore the original sys.path
+        self.__old_syspath = sys.path[:]
+        # Record sys.modules here so we can restore it in tearDown.
+        self.__old_modules = dict(sys.modules)
+
+    def tearDown(self):
+        # Restore the original sys.path.
+        sys.path = self.__old_syspath
+        # Restore any loaded modules
+        self.__clean_modules()
+
+    def __clean_modules(self):
+        """Remove any new modules imported during the test run.
+
+        This lets us import the same source files for more than one test.
+
+        """
+        for m in [m for m in sys.modules if m not in self.__old_modules]:
+            del sys.modules[m]
 
 
 def destructiveTest(func):

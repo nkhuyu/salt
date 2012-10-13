@@ -436,8 +436,9 @@ class VagrantTestDaemon(TestDaemon):
             #module=True,
             #states=True,
             pnum=PNUM,
-            xml = self.opts.xmlout
         )
+        if self.opts.xmlout:
+            run_tests_kwargs['xml'] = True
 
         run_tests_arg = [
             '{0}={1}'.format(k, v) for (k, v) in run_tests_kwargs.iteritems()
@@ -627,6 +628,7 @@ class ModuleCase(TestCase):
         '''
         Generate the tools to test a module
         '''
+        super(ModuleCase, self).setUp()
         self.client = salt.client.LocalClient(
             os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
         )
@@ -705,6 +707,7 @@ class SyndicCase(TestCase):
         '''
         Generate the tools to test a module
         '''
+        super(SyndicCase, self).setUp()
         self.client = salt.client.LocalClient(
             os.path.join(
                 INTEGRATION_TEST_DIR,
@@ -858,6 +861,3 @@ class ShellCaseCommonTestsMixIn(object):
         out = '\n'.join(self.run_script(self._call_binary_, "--version"))
         self.assertIn(self._call_binary_, out)
         self.assertIn(salt.__version__, out)
-
-# sudo kill -KILL $(ps aux | grep python | grep "runtests" | awk '{print $2}')
-# CMD=""; PIDS=$(ps aux | grep python | grep -E -w "runtests|salt-m" | awk '{print $2}'); for p in $PIDS; do CMD="$CMD -p $p"; done; eval "sudo strace -f -e trace=write -e verbose=none -e write=1,2 -q $CMD"
