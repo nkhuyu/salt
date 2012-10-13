@@ -4,9 +4,10 @@
 Discover all instances of unittest.TestCase in this directory.
 '''
 # Import python libs
-import sys
 import os
+import sys
 import glob
+import shutil
 import logging
 import optparse
 import resource
@@ -25,6 +26,7 @@ COVERAGE_REPORT = os.path.join(TEST_DIR, 'coverage-report')
 
 try:
     import coverage
+    from coverage.misc import CoverageException
     # Cover any subprocess
     coverage.process_startup()
     try:
@@ -38,8 +40,7 @@ try:
     code_coverage = coverage.coverage(
         branch=True,
         data_file=COVERAGE_FILE,
-        source=[os.getcwd()],
-        include=[os.path.join(os.getcwd(), 'salt')]
+        source=[os.path.join(os.getcwd(), 'salt')],
     )
     code_coverage.erase()
 except ImportError:
@@ -379,7 +380,6 @@ def parse_opts():
         '[%(levelname)-8s] %(message)s',
         datefmt='%H:%M:%S'
     )
-    logfile = os.path.join(tempfile.gettempdir(), 'salt-runtests.log')
     filehandler = logging.FileHandler(
         mode='w',           # Not preserved between re-runs
         filename=LOGFILE
@@ -430,55 +430,72 @@ def stop_coverage(opts):
 
     if opts.coverage and not opts.no_coverage_report:
         print(
-            '\n  * Generating Coverage HTML Report Under {0!r} ...'.format(
+            '  * Generating Coverage HTML Report(s) Under {0!r} ...'.format(
                 opts.coverage_output
             )
-        ),
-        sys.stdout.flush()
+        )
         if os.path.isdir(opts.coverage_output):
-            import shutil
             shutil.rmtree(opts.coverage_output)
 
-        for cname in sorted(glob.glob(COVERAGE_FILE + '*')):
+        coverage_files = sorted(glob.glob(COVERAGE_FILE + '*'))
+        for cname in coverage_files:
             cname_parts = cname.rsplit('.', 1)
+            # The backup name needs to be like this so it does not get picked
+            # up by the combine() call bellow.
+            shutil.copyfile(
+                cname,
+                cname.replace(
+                    cname_parts[-1],
+                    'bak.{0}'.format(cname_parts[-1])
+                )
+            )
             if cname_parts[-1] == 'coverage':
                 # This is the test suite which gathers info from all running
                 # vagrant machines
                 cname_parts[-1] = 'Starter Machine'
 
             print(
-                '  * Generating coverage report for {0}'.format(
+                '    * Generating coverage report for {0} ...'.format(
                     cname_parts[-1]
                 )
-            )
+            ),
+            sys.stdout.flush()
 
             report_dir = os.path.join(opts.coverage_output, cname_parts[-1])
 
-            partial_coverage = coverage.coverage(
-                branch=True,
-                data_file=cname,
-                source=[os.getcwd()],
-                include=[os.path.join(os.getcwd(), 'salt')]
-            )
-            partial_coverage.load()
-            partial_coverage.html_report(
-                directory=report_dir,
-                #ignore_errors=True,
-                #include=[os.path.join(os.getcwd(), 'salt')]
-            )
+            try:
+                partial_coverage = coverage.coverage(
+                    branch=True,
+                    data_file=cname,
+                    source=[os.path.join(os.getcwd(), 'salt')],
+                )
+                partial_coverage.load()
+                partial_coverage.html_report(
+                    directory=report_dir
+                )
+            except CoverageException, err:
+                print('Error while generating coverage report '
+                      'for {0}: {1}'.format(cname_parts[-1], err))
+            else:
+                print('OK')
 
-        if os.path.exists(COVERAGE_FILE):
-            print('  * Generating the combined coverage report')
+        if os.path.exists(COVERAGE_FILE) and len(coverage_files) > 1:
+            print('    * Generating the combined coverage report ...'),
+            sys.stdout.flush()
+            try:
+                code_coverage.load()
+                code_coverage.combine()
+                code_coverage.html_report(
+                    directory=os.path.join(
+                        opts.coverage_output, 'Combined Coverage'
+                    ),
+                )
+            except CoverageException, err:
+                print('Error while generating the combined coverage '
+                      'report: {0}'.format(err))
+            else:
+                print('OK')
 
-            code_coverage.load()
-            #code_coverage.combine()
-            code_coverage.html_report(
-                directory=os.path.join(
-                    opts.coverage_output, 'Combined Coverage'
-                ),
-                #ignore_errors=True,
-                #include=[os.path.join(os.getcwd(), 'salt', '**')]
-            )
         print('  * Done.')
         print_header('', sep='=')
 
