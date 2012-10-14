@@ -116,7 +116,7 @@ class MatchTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         self.assertIn('minion', data)
         self.assertIn('sub_minion', data)
 
-    def test_ipcadr(self):
+    def test_ipcidr(self):
         subnets_data = self.run_salt('\'*\' network.subnets')
         subnet = None
         for line in re.findall(r'{[^}]+}', '\n'.join(subnets_data)):
@@ -130,7 +130,7 @@ class MatchTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         if subnet is None:
             self.skipTest('Failed to query the minion\'s subnets')
 
-        data = self.run_salt('-S {0} test.ping'.format(subnet))
+        data = self.run_salt('--ipcidr {0} test.ping'.format(subnet))
         data = '\n'.join(data)
         self.assertIn('minion', data)
         self.assertIn('sub_minion', data)
