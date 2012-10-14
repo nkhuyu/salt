@@ -364,11 +364,11 @@ def parse_opts():
                 'to produce incorrect results. Please consider upgrading...'
             )
 
-        if False: #not options.vagrant_test and any(
-                  #      (options.module, options.client, options.shell,
-                  #       options.unit, options.state, options.runner,
-                  #       options.name,
-                  #       os.geteuid() is not 0, not options.run_destructive)):
+        if not options.vagrant_test and any(
+                        (options.module, options.client, options.shell,
+                         options.unit, options.state, options.runner,
+                         options.name,
+                         os.geteuid() is not 0, not options.run_destructive)):
             parser.error(
                 'No sense in generating the tests coverage report when not '
                 'running the full test suite, including the destructive '
