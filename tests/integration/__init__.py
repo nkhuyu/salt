@@ -471,27 +471,8 @@ class VagrantTestDaemon(TestDaemon):
 
         data = {}
         steps = 3
-        print
-        sys.stdout.write(
-            '  * Waiting for test results from {0} '.format(
-                ', '.join(running)
-            )
-        )
 
-        if not progress_evt.is_set():
-            sys.stdout.write('\n')
-            sys.stdout.flush()
-
-        #iterations = 10
         while running:
-            #if iterations <= 0:
-            #    data = self.__client.gather_job_info(
-            #        jid_info['jid'], '*', 'glob'
-            #    )
-            #    print 12345, data
-            #    iterations = 10
-            #iterations -= 1
-
             rdata = self.client.get_returns(jid_info['jid'], targets, 1)
             if rdata:
                 for idx, (name, output) in enumerate(rdata.iteritems()):
