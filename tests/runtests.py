@@ -24,18 +24,20 @@ TEST_DIR = os.path.dirname(os.path.normpath(os.path.abspath(__file__)))
 COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 COVERAGE_REPORT = os.path.join(TEST_DIR, 'coverage-report')
 
+SALT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+
+try:
+    if SALT_ROOT:
+        os.chdir(SALT_ROOT)
+except OSError, err:
+    print 'Failed to change directory to salt\'s source: {0}'.format(err)
+
+
 try:
     import coverage
     from coverage.misc import CoverageException
     # Cover any subprocess
     coverage.process_startup()
-    try:
-        salt_root = os.path.dirname(os.path.dirname(__file__))
-        if salt_root:
-            os.chdir(salt_root)
-    except OSError, err:
-        print 'Failed to change directory to salt\'s source: {0}'.format(err)
-
     # Setup coverage
     code_coverage = coverage.coverage(
         branch=True,
@@ -362,11 +364,11 @@ def parse_opts():
                 'to produce incorrect results. Please consider upgrading...'
             )
 
-        if not options.vagrant_test and any(
-                        (options.module, options.client, options.shell,
-                         options.unit, options.state, options.runner,
-                         options.name,
-                         os.geteuid() is not 0, not options.run_destructive)):
+        if False: #not options.vagrant_test and any(
+                  #      (options.module, options.client, options.shell,
+                  #       options.unit, options.state, options.runner,
+                  #       options.name,
+                  #       os.geteuid() is not 0, not options.run_destructive)):
             parser.error(
                 'No sense in generating the tests coverage report when not '
                 'running the full test suite, including the destructive '
@@ -442,17 +444,19 @@ def stop_coverage(opts):
             shutil.rmtree(opts.coverage_output)
 
         coverage_files = sorted(glob.glob(COVERAGE_FILE + '*'))
+        common_prefix = os.path.commonprefix(coverage_files)
         for cname in coverage_files:
-            cname_parts = cname.rsplit('.', 1)
+            cname_parts = cname.split('.')
             # The backup name needs to be like this so it does not get picked
             # up by the combine() call bellow.
-            shutil.copyfile(
-                cname,
-                cname.replace(
-                    cname_parts[-1],
-                    'bak.{0}'.format(cname_parts[-1])
-                )
+            cname_backup = os.path.join(
+                cname_parts[0], '.bak.{0}'.format('.'.join(cname_parts[1:]))
             )
+            if os.path.isfile(cname_backup):
+                os.remove(cname_backup)
+
+            shutil.copyfile(cname, cname_backup)
+
             if cname_parts[-1] == 'coverage':
                 # This is the test suite which gathers info from all running
                 # vagrant machines

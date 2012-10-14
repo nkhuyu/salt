@@ -453,6 +453,7 @@ class VagrantTestDaemon(TestDaemon):
             #module=True,
             #states=True,
             pnum=PNUM,
+            cwd=os.getcwd()
         )
         if self.opts.xmlout:
             run_tests_kwargs['xml'] = True
@@ -533,10 +534,7 @@ class VagrantTestDaemon(TestDaemon):
         # All finished, gather coverage data back from the vagrant minions
         coverage_data = self.client.cmd(
             ','.join(targets),
-            'runtests.get_coverage',
-            ret='raw',
-            cwd="/tmp",
-            expr_form='list'
+            'runtests.get_coverage', cwd='/tmp', expr_form='list'
         )
 
         if coverage_data:
@@ -544,51 +542,25 @@ class VagrantTestDaemon(TestDaemon):
                 '  Checking for remote coverage data  ',
                 sep='=', centered=True, bottom=False
             )
-            idx = 1
             for name, data in coverage_data.iteritems():
                 if name in ('minion', 'sub_minion'):
-                    continue
-                if not isinstance(data, dict):
-                    print('  * An error occurred on {0}: {1}'.format(
-                        name, output
-                    ))
                     continue
                 if not data:
                     # No coverage data was created
                     continue
-                print('  * Saving remote coverage data from {0}'.format(name))
-                import cPickle
-                cPickle.dump(
-                    self.__switch_remote_to_local_paths(data),
-                    open('{0}.{1}'.format(COVERAGE_FILE, name), 'wb+')
+                coverage_file = '{0}.{1}'.format(COVERAGE_FILE, name)
+                print(
+                    '  * Saving remote coverage data from {0}: {1}'.format(
+                        name, coverage_file
+                    )
                 )
-                idx += 1
+                open(coverage_file, 'wb').write(
+                    data.decode('base64')
+                )
             print_header('', sep='=', inline=True)
 
         # Let's signal anyone waiting for the event that we're done
         finish_evt.set()
-
-    def __switch_remote_to_local_paths(self, remote_data):
-        local_path = os.getcwd()
-        remote_path = '/salt/source/'
-        converted = {}
-
-        def traverse(chunk):
-            d = {}
-            for key, data in chunk.iteritems():
-                if isinstance(key, basestring) and key.startswith(remote_path):
-                    key = os.path.join(
-                        local_path, key.split(remote_path, 1)[-1]
-                    )
-                d[key] = data
-            return d
-
-        for key, data in remote_data.iteritems():
-            if isinstance(data, dict):
-                data = traverse(data)
-            converted[key] = data
-
-        return converted
 
     def __stop_machines(self):
         if self.opts.vagrant_no_stop:

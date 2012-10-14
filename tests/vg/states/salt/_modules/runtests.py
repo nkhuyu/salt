@@ -7,6 +7,7 @@
 
 # Import python modules
 import os
+import shutil
 import logging
 import cPickle
 import tempfile
@@ -28,7 +29,7 @@ def run_tests(module=False, state=False, client=False, shell=False,
               runner=False, unit=False, verbose=1, xml=False, name=[],
               clean=False, no_clean=False, run_destructive=False,
               no_report=False, coverage=False, no_coverage_report=False,
-              coverage_output=None, pnum=70):
+              coverage_output=None, pnum=70, cwd=tempfile.gettempdir()):
 
     """
     Run tests.
@@ -42,6 +43,37 @@ def run_tests(module=False, state=False, client=False, shell=False,
                 python_bin
             )
         )
+
+    if coverage:
+        cwd_dirname = os.path.dirname(cwd)
+        log.warning(
+            'In order to properly combine coverage data, the tests need to '
+            'share the same running paths'
+        )
+        if cwd == tempfile.gettempdir():
+            raise CommandExecutionError('You need to specify a proper cwd')
+
+        # Let's mimic the directory paths from the starting runtests call
+        if os.path.exists(cwd_dirname):
+            log.info(
+                'Removing the previous copied salt source tree: {0}'.format(
+                    cwd_dirname
+                )
+            )
+            # Leftover from a previous test run
+            shutil.rmtree(cwd_dirname, ignore_errors=False)
+
+        # Create the source's parent directory
+        log.info('Creating the mimicked salt\'s source parent directory')
+        os.makedirs(cwd_dirname)
+
+        # Copy salt's source to the new location
+        log.info(
+            'Copying salt\'s source tree to the new location: {0}'.format(cwd)
+        )
+        shutil.copytree('/salt/source/', cwd, symlinks=True)
+        runtests_bin = os.path.join(cwd, 'tests', 'runtests.py')
+
 
     if not __salt__['cmd.has_exec'](runtests_bin):
         raise CommandExecutionError(
@@ -100,15 +132,16 @@ def run_tests(module=False, state=False, client=False, shell=False,
         pnum, python_bin, runtests_bin, ' '.join(arg)
     )
     log.info('Running command {0!r}'.format(cmd))
-    return __salt__['cmd.run_all'](cmd, cwd='/tmp', runas='root', env=env)
+    return __salt__['cmd.run_all'](cmd, cwd=cwd, runas='root', env=env)
 
 
 def get_coverage():
     COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
     if not os.path.isfile(COVERAGE_FILE):
-        return {}
+        return ''
     try:
+        return open(COVERAGE_FILE).read().encode('base64')
         return cPickle.load(open(COVERAGE_FILE))
     except Exception, err:
         log.error('Failed to load coverage pickled data: {0}'.format(err))
-    return {}
+    return ''
