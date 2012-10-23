@@ -104,7 +104,7 @@ class LoadAuth(object):
         '''
         ret = self.time_auth(load)
         if ret is False:
-            return ret
+            return {}
         fstr = '{0}.auth'.format(load['eauth'])
         tok = str(hashlib.md5(os.urandom(512)).hexdigest())
         t_path = os.path.join(self.opts['token_dir'], tok)
@@ -127,7 +127,7 @@ class LoadAuth(object):
         not valid
         '''
         t_path = os.path.join(self.opts['token_dir'], tok)
-        if not os.path.isfile:
+        if not os.path.isfile(t_path):
             return {}
         with open(t_path, 'r') as fp_:
             tdata = self.serial.loads(fp_.read())
@@ -197,6 +197,8 @@ class Resolver(object):
                 'tcp://{0[interface]}:{0[ret_port]}'.format(self.opts),
                 )
         tdata = sreq.send('clear', load)
+        if not 'token' in tdata:
+            return tdata
         try:
             with open(self.opts['token_file'], 'w+') as fp_:
                 fp_.write(tdata['token'])

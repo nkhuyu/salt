@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-
+# pylint: disable=C0103,W0622
+'''
+Sphinx documentation for Salt
+'''
 import sys
 import os
 import types
@@ -7,6 +10,7 @@ import types
 from sphinx.directives import TocTree
 
 
+# pylint: disable=R0903
 class Mock(object):
     '''
     Mock out specified imports
@@ -30,6 +34,7 @@ class Mock(object):
             return type(name, (), {})
         else:
             return Mock()
+# pylint: enable=R0903
 
 MOCK_MODULES = [
     # salt core
@@ -93,8 +98,12 @@ master_doc = 'contents'
 templates_path = ['_templates']
 exclude_patterns = ['_build']
 
-extensions = ['saltdocs', 'sphinx.ext.autodoc', 'sphinx.ext.extlinks',
-    'sphinx.ext.autosummary']
+extensions = [
+    'saltdocs',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.extlinks',
+]
 
 modindex_common_prefix = ['salt.']
 
@@ -145,7 +154,7 @@ html_context = {
     'github_downloads': 'https://github.com/saltstack/salt/downloads',
 }
 
-html_use_index = False
+html_use_index = True
 html_last_updated_fmt = '%b %d, %Y'
 html_show_sourcelink = False
 html_show_sphinx = True

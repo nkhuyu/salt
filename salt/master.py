@@ -593,43 +593,42 @@ class AESFuncs(object):
         # The old ext_nodes method is set to be deprecated in 0.10.4
         # and should be removed within 3-5 releases in favor of the
         # "master_tops" system
-        if not self.opts['external_nodes']:
-            return {}
-        if not salt.utils.which(self.opts['external_nodes']):
-            log.error(('Specified external nodes controller {0} is not'
-                       ' available, please verify that it is installed'
-                       '').format(self.opts['external_nodes']))
-            return {}
-        cmd = '{0} {1}'.format(self.opts['external_nodes'], load['id'])
-        ndata = yaml.safe_load(
-                subprocess.Popen(
-                    cmd,
-                    shell=True,
-                    stdout=subprocess.PIPE
-                    ).communicate()[0])
-        if 'environment' in ndata:
-            env = ndata['environment']
-        else:
-            env = 'base'
-
-        if 'classes' in ndata:
-            if isinstance(ndata['classes'], dict):
-                ret[env] = list(ndata['classes'])
-            elif isinstance(ndata['classes'], list):
-                ret[env] = ndata['classes']
+        if self.opts['external_nodes']:
+            if not salt.utils.which(self.opts['external_nodes']):
+                log.error(('Specified external nodes controller {0} is not'
+                           ' available, please verify that it is installed'
+                           '').format(self.opts['external_nodes']))
+                return {}
+            cmd = '{0} {1}'.format(self.opts['external_nodes'], load['id'])
+            ndata = yaml.safe_load(
+                    subprocess.Popen(
+                        cmd,
+                        shell=True,
+                        stdout=subprocess.PIPE
+                        ).communicate()[0])
+            if 'environment' in ndata:
+                env = ndata['environment']
             else:
-                return ret
+                env = 'base'
+
+            if 'classes' in ndata:
+                if isinstance(ndata['classes'], dict):
+                    ret[env] = list(ndata['classes'])
+                elif isinstance(ndata['classes'], list):
+                    ret[env] = ndata['classes']
+                else:
+                    return ret
         # Evaluate all configured master_tops interfaces
 
         opts = {}
         grains = {}
         if 'opts' in load:
             opts = load['opts']
-            if grains in load['opts']:
+            if 'grains' in load['opts']:
                 grains = load['opts']['grains']
         for fun in self.tops:
             try:
-                ret.update(self.tops[fun](opts, grains))
+                ret.update(self.tops[fun](opts=opts, grains=grains))
             except Exception as exc:
                 log.error(
                         ('Top function {0} failed with error {1} for minion '
@@ -770,7 +769,7 @@ class AESFuncs(object):
         '''
         if 'id' not in load or 'tag' not in load or 'data' not in load:
             return False
-        tag = '{0}_{1}'.format(load['tag'], load['id'])
+        tag = load['tag']
         return self.event.fire_event(load, tag)
 
     def _return(self, load):
@@ -1072,6 +1071,27 @@ class AESFuncs(object):
         # (we don't care about the return value, so why encrypt it?)
         if func == '_return':
             return ret
+        if func == '_pillar' and 'id' in load:
+            if not load.get('ver') == '2' and self.opts['pillar_version'] == 1:
+                # Authorized to return old pillar proto
+                return self.crypticle.dumps(ret)
+            # encrypt with a specific aes key
+            pubfn = os.path.join(self.opts['pki_dir'],
+                    'minions',
+                    load['id'])
+            key = salt.crypt.Crypticle.generate_key_string()
+            pcrypt = salt.crypt.Crypticle(
+                    self.opts,
+                    key)
+            try:
+                pub = RSA.load_pub_key(pubfn)
+            except RSA.RSAError, e:
+                return self.crypticle.dumps({})
+
+            pret = {}
+            pret['key'] = pub.public_encrypt(key, 4)
+            pret['pillar'] = pcrypt.dumps(ret)
+            return pret
         # AES Encrypt the return
         return self.crypticle.dumps(ret)
 
@@ -1253,6 +1273,16 @@ class ClearFuncs(object):
             # open mode is turned on, nuts to checks and overwrite whatever
             # is there
             pass
+        elif os.path.isfile(pubfn_rejected):
+            # The key has been rejected, don't place it in pending
+            log.info('Public key rejected for {id}'.format(**load))
+            ret = {'enc': 'clear',
+                   'load': {'ret': False}}
+            eload = {'result': False,
+                     'id': load['id'],
+                     'pub': load['pub']}
+            self.event.fire_event(eload, 'auth')
+            return ret
         elif os.path.isfile(pubfn):
             # The key has been accepted check it
             if not open(pubfn, 'r').read() == load['pub']:
@@ -1268,16 +1298,6 @@ class ClearFuncs(object):
                          'pub': load['pub']}
                 self.event.fire_event(eload, 'auth')
                 return ret
-        elif os.path.isfile(pubfn_rejected):
-            # The key has been rejected, don't place it in pending
-            log.info('Public key rejected for {id}'.format(**load))
-            ret = {'enc': 'clear',
-                   'load': {'ret': False}}
-            eload = {'result': False,
-                     'id': load['id'],
-                     'pub': load['pub']}
-            self.event.fire_event(eload, 'auth')
-            return ret
         elif not os.path.isfile(pubfn_pend)\
                 and not self._check_autosign(load['id']):
             # This is a new key, stick it in pre
@@ -1370,6 +1390,15 @@ class ClearFuncs(object):
                'token': self.master_key.token,
                'publish_port': self.opts['publish_port'],
               }
+        if 'token' in load:
+            try:
+                mtoken = self.master_key.key.private_decrypt(load['token'], 4)
+                ret['token'] = pub.public_encrypt(mtoken, 4)
+            except Exception:
+                # Token failed to decrypt, send back the salty bacon to
+                # support older minions
+                pass
+
         ret['aes'] = pub.public_encrypt(self.opts['aes'], 4)
         eload = {'result': True,
                  'act': 'accept',
@@ -1444,6 +1473,9 @@ class ClearFuncs(object):
                     return ''
             elif clear_load['user'] == getpass.getuser():
                 if not clear_load.pop('key') == self.key.get(getpass.getuser()):
+                    return ''
+            elif clear_load['user'] == 'root':
+                if not clear_load.pop('key') == self.key.get(self.opts.get('user', 'root')):
                     return ''
             else:
                 if clear_load['user'] in self.key:

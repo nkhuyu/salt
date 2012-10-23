@@ -372,7 +372,7 @@ def required_modules_error(name, docstring):
     return msg.format(filename, ', '.join(modules))
 
 
-def prep_jid(cachedir, sum_type):
+def prep_jid(cachedir, sum_type, user='root'):
     '''
     Return a job id and prepare the job id directory
     '''
@@ -544,12 +544,11 @@ def build_whitepace_splited_regex(text):
         lexer = shlex.shlex(text)
         lexer.whitespace_split = True
         lexer.commenters = ''
-        if '"' in text:
+        if '\'' in text:
             lexer.quotes = '"'
-        elif '\'' in text:
+        elif '"' in text:
             lexer.quotes = '\''
         return list(lexer)
-
 
     regex = r''
     for line in text.splitlines():

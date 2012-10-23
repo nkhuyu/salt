@@ -1,5 +1,22 @@
 '''
-The cmd_yaml replaces the original ext_nodes function
+External Nodes Classifier
+=========================
+
+The External Nodes Classifier is a master tops subsystem used to hook into
+systems used to provide mapping information used by major configuration
+management systems. One of the most common external nodes classification
+system is provided by Cobbler and is called ``cobbler-ext-nodes``.
+
+The cobbler-ext-nodes command can be used with this configuration:
+
+.. code-block:: yaml
+
+    master_tops:
+      ext_nodes: cobbler-ext-nodes
+
+It is noteworthy that the Salt system does not directly ingest the data
+sent from the ``cobbler-ext-nodes`` command, but converts the data into
+information that is used by a Salt top file.
 '''
 
 # Import python libs
@@ -10,6 +27,7 @@ import yaml
 
 # Import Salt libs
 import salt.utils
+
 
 def __virtual__():
     '''
@@ -24,20 +42,19 @@ def top(**kwargs):
     '''
     Run the command configured
     '''
-    if not 'id' in kwargs:
+    if not 'id' in kwargs['opts']:
         return {}
-    if not salt.utils.which(__opts__['master_tops']['ext_nodes']):
-        log.error(('Specified external nodes controller {0} is not'
-                   ' available, please verify that it is installed'
-                   '').format(__opts__['master_tops']['ext_nodes']))
-        return {}
-    cmd = '{0} {1}'.format(__opts__['master_tops']['ext_nodes'], kwargs['id'])
+    cmd = '{0} {1}'.format(
+            __opts__['master_tops']['ext_nodes'],
+            kwargs['opts']['id']
+            )
     ndata = yaml.safe_load(
             subprocess.Popen(
                 cmd,
                 shell=True,
                 stdout=subprocess.PIPE
                 ).communicate()[0])
+    print ndata
     ret = {}
     if 'environment' in ndata:
         env = ndata['environment']

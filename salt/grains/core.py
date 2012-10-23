@@ -40,6 +40,17 @@ __salt__ = {
 
 log = logging.getLogger(__name__)
 
+has_wmi = False
+if sys.platform.startswith('win'):
+    # attempt to import the python wmi module
+    # the Windows minion uses WMI for some of its grains
+    try:
+        import wmi
+        has_wmi = True
+    except ImportError:
+        log.exception("Unable to import Python wmi module, some core grains "
+                      "will be missing")
+
 
 def _windows_cpudata():
     '''
@@ -164,8 +175,7 @@ def _memdata(osdata):
             comps = line.split(' ')
             if comps[0].strip() == 'Memory' and comps[1].strip() == 'size:':
                 grains['mem_total'] = int(comps[2].strip())
-    elif osdata['kernel'] == 'Windows':
-        import wmi
+    elif osdata['kernel'] == 'Windows' and has_wmi:
         wmi_c = wmi.WMI()
         # this is a list of each stick of ram in a system
         # WMI returns it as the string value of the number of bytes
@@ -327,7 +337,7 @@ def _ps(osdata):
     bsd_choices = ('FreeBSD', 'NetBSD', 'OpenBSD', 'MacOS')
     if osdata['os'] in bsd_choices:
         grains['ps'] = 'ps auxwww'
-    elif osdata['os'] == 'Solaris':
+    elif osdata['os_family'] == 'Solaris':
         grains['ps'] = '/usr/ucb/ps auxwww'
     elif osdata['os'] == 'Windows':
         grains['ps'] = 'tasklist.exe'
@@ -350,8 +360,9 @@ def _windows_platform_data(osdata):
     #    timezone
     #    windowsdomain
 
-    import wmi
-    from datetime import datetime
+    if not has_wmi:
+        return {}
+
     wmi_c = wmi.WMI()
     # http://msdn.microsoft.com/en-us/library/windows/desktop/aa394102%28v=vs.85%29.aspx
     systeminfo = wmi_c.Win32_ComputerSystem()[0]
@@ -394,6 +405,8 @@ _os_name_map = {
     'redhatente': 'RedHat',
     'debian': 'Debian',
     'arch': 'Arch',
+    'amazonlinu': 'Amazon',
+    'centoslinu': 'CentOS',
 }
 
 # Map the 'os' grain to the 'os_family' grain
@@ -405,17 +418,19 @@ _os_family_map = {
     'Scientific': 'RedHat',
     'Amazon': 'RedHat',
     'CloudLinux': 'RedHat',
+    'OVS': 'RedHat',
+    'OEL': 'RedHat',
     'Mandrake': 'Mandriva',
     'ESXi': 'VMWare',
     'VMWareESX': 'VMWare',
     'Bluewhite64': 'Bluewhite',
     'Slamd64': 'Slackware',
-    'OVS': 'Oracle',
-    'OEL': 'Oracle',
     'SLES': 'Suse',
     'SLED': 'Suse',
     'openSUSE': 'Suse',
-    'SUSE': 'Suse'
+    'SUSE': 'Suse',
+    'Solaris': 'Solaris',
+    'SmartOS': 'Solaris',
 }
 
 
@@ -424,13 +439,19 @@ def os_data():
     Return grains pertaining to the operating system
     '''
     grains = {}
-    (grains['defaultlanguage'],
-     grains['defaultencoding']) = locale.getdefaultlocale()
+    try:
+        (grains['defaultlanguage'],
+         grains['defaultencoding']) = locale.getdefaultlocale()
+    except Exception:
+        # locale.getdefaultlocale can ValueError!! Catch anything else it
+        # might do, per #2205
+        grains['defaultlanguage'] = 'unknown'
+        grains['defaultencoding'] = 'unknown'
     # Windows Server 2008 64-bit
     # ('Windows', 'MINIONNAME', '2008ServerR2', '6.1.7601', 'AMD64', 'Intel64 Fam ily 6 Model 23 Stepping 6, GenuineIntel')
     # Ubuntu 10.04
     # ('Linux', 'MINIONNAME', '2.6.32-38-server', '#83-Ubuntu SMP Wed Jan 4 11:26:59 UTC 2012', 'x86_64', '')
-    (grains['kernel'], grains['host'],
+    (grains['kernel'], grains['nodename'],
      grains['kernelrelease'], version, grains['cpuarch'], _) = platform.uname()
     if grains['kernel'] == 'Windows':
         grains['osrelease'] = grains['kernelrelease']
@@ -484,6 +505,11 @@ def os_data():
         grains.update(_linux_cpudata())
     elif grains['kernel'] == 'SunOS':
         grains['os'] = 'Solaris'
+        if os.path.isfile('/etc/release'):
+            with open('/etc/release', 'r') as fp_:
+                rel_data = fp_.read()
+                if 'SmartOS' in rel_data:
+                    grains['os'] = 'SmartOS'
         grains.update(_sunos_cpudata(grains))
     elif grains['kernel'] == 'VMkernel':
         grains['os'] = 'ESXi'

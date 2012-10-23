@@ -79,6 +79,9 @@ class LocalClient(object):
         Read in the rotating master authentication key
         '''
         key_user = self.salt_user
+        if key_user == 'root':
+            if self.opts.get('user', 'root') != 'root':
+                key_user = self.opts.get('user', 'root')
         if key_user.startswith('sudo_'):
             key_user = 'root'
         keyfile = os.path.join(
@@ -101,8 +104,8 @@ class LocalClient(object):
         user = getpass.getuser()
         # if our user is root, look for other ways to figure out
         # who we are
-        if user == 'root':
-            env_vars = ['SUDO_USER', 'USER', 'USERNAME']
+        if user == 'root' or 'SUDO_USER' in os.environ:
+            env_vars = ['SUDO_USER']
             for evar in env_vars:
                 if evar in os.environ:
                     return 'sudo_{0}'.format(os.environ[evar])
@@ -164,7 +167,8 @@ class LocalClient(object):
         try:
             jid = salt.utils.prep_jid(
                     self.opts['cachedir'],
-                    self.opts['hash_type']
+                    self.opts['hash_type'],
+                    user = __opts__['user']
                     )
         except Exception:
             jid = ''
@@ -616,6 +620,7 @@ class LocalClient(object):
         '''
         Get the returns for the command line interface via the event system
         '''
+        minions = set(minions)
         if verbose:
             msg = 'Executing job with jid {0}'.format(jid)
             print(msg)
@@ -855,7 +860,10 @@ class LocalClient(object):
                 conf_file = self.opts.get('conf_file', 'the master config file')
                 err = 'Node group {0} unavailable in {1}'.format(tgt, conf_file)
                 raise SaltInvocationError(err)
-            tgt = self.opts['nodegroups'][tgt]
+            tgt = salt.utils.minions.nodegroup_comp(
+                    tgt,
+                    self.opts['nodegroups']
+                    )
             expr_form = 'compound'
 
         # Convert a range expression to a list of nodes and change expression
