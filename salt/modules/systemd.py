@@ -14,9 +14,13 @@ def __virtual__():
     '''
     Only work on systems which default to systemd
     '''
+    enable = (
+            'Arch',
+            'openSUSE',
+            )
     if __grains__['os'] == 'Fedora' and __grains__['osrelease'] > 15:
         return 'service'
-    elif __grains__['os'] == 'openSUSE':
+    elif __grains__['os'] in enable:
         return 'service'
     return False
 
@@ -166,20 +170,15 @@ def reload(name):
 # system
 def status(name, sig=None):
     '''
-    Return the status for a service via systemd, returns the PID if the service
-    is running or an empty string if the service is not running
+    Return the status for a service via systemd, returns a bool
+    whether the service is running.
 
     CLI Example::
 
         salt '*' service.status <service name>
     '''
-    ret = __salt__['cmd.run'](_systemctl_cmd('show', name))
-    index1 = ret.find('\nMainPID=')
-    index2 = ret.find('\n', index1+9)
-    mainpid = ret[index1+9:index2]
-    if mainpid == '0':
-        return ''
-    return mainpid
+    cmd = 'systemctl is-active {0}'.format(name)
+    return not __salt__['cmd.retcode'](cmd)
 
 
 def enable(name):
