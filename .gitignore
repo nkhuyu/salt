@@ -33,4 +33,5 @@ htmlcov/
 /.pydevproject
 
 # test vagrant machines
-tests/vg/*/.vagrant
+tests/vgm/Gemfile.lock
+tests/vgm/*/.vagrant
