@@ -17,6 +17,7 @@ import datetime
 import tempfile
 import shlex
 import shutil
+import subprocess
 import time
 import platform
 from calendar import month_abbr as months
@@ -461,6 +462,11 @@ def copyfile(source, dest, backup_mode='', cachedir=''):
         pass
     try:
         shutil.move(tgt, dest)
+        # If SELINUX is available run a restorecon on the file
+        rcon = which('restorecon')
+        if rcon:
+            cmd = [rcon, dest]
+            subprocess.call(cmd)
     except Exception:
         pass
     if os.path.isfile(tgt):
@@ -622,4 +628,28 @@ def arg_lookup(fun):
         else:
             ret['args'].append(arg)
     return ret
+
+
+def istextfile(fp_, blocksize=512):
+    '''
+    Uses heuristics to guess whether the given file is text or binary,
+    by reading a single block of bytes from the file.
+    If more than 30% of the chars in the block are non-text, or there
+    are NUL ('\x00') bytes in the block, assume this is a binary file.
+    '''
+    PY3 = sys.version_info[0] == 3
+    int2byte = (lambda x: bytes((x,))) if PY3 else chr
+    text_characters = (
+        b''.join(int2byte(i) for i in range(32, 127)) +
+        b'\n\r\t\f\b')
+    block = fp_.read(blocksize)
+    if b'\x00' in block:
+        # Files with null bytes are binary
+        return False
+    elif not block:
+        # An empty file is considered a valid text file
+        return True
+
+    nontext = block.translate(None, text_characters)
+    return float(len(nontext)) / len(block) <= 0.30
 

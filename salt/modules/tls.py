@@ -1,6 +1,7 @@
 '''
-A salt interface for running a Certificate Authority (CA)
-which provides signed/unsigned SSL certificates
+A salt module for SSL/TLS.
+Can create a Certificate Authority (CA)
+or use Self-Signed certificates.
 
 REQUIREMENT 1:
 
@@ -37,7 +38,7 @@ def __virtual__():
     Only load this module if the ca config options are set
     '''
     if has_ssl:
-        return 'ca'
+        return 'tls'
     return False
 
 
@@ -265,7 +266,6 @@ def create_ca(
                     ca_name
                     )
 
-
 def create_csr(
         ca_name,
         bits=2048,
@@ -376,18 +376,130 @@ def create_csr(
                     CN
                     )
 
+def create_self_signed_cert(
+        tls_dir='tls',
+        bits=2048,
+        days=365,
+        CN='localhost',
+        C='US',
+        ST='Utah',
+        L='Salt Lake City',
+        O='Salt Stack',
+        OU=None,
+        emailAddress='xyz@pdq.net'):
 
-def create_self_signed_cert(bits=2048):
     '''
-    Create a Self-Signed Certificate (CERT) -- Not yet implemented
-    '''
-    pass
+    Create a Self-Signed Certificate (CERT)
 
+    tls_dir
+        location appended to the ca.cert_base_path, default is 'tls'
+    bits
+        number of RSA key bits, default is 2048
+    CN
+        common name in the request, default is "localhost"
+    C
+        country, default is "US"
+    ST
+        state, default is "Utah"
+    L
+        locality, default is "Centerville", the city where SaltStack originated
+    O
+        organization, default is "Salt Stack"
+        NOTE: Must the same as CA certificate or an error will be raised
+    OU
+        organizational unit, default is None
+    emailAddress
+        email address for the request, default is 'xyz@pdq.net'
+
+    Writes out a Self-Signed Certificate (CERT). If the file already
+    exists, the function just returns.
+
+    If the following values were set:
+
+    ca.cert_base_path='/etc/pki/koji'
+    tls_dir='koji'
+    CN='test.egavas.org'
+
+    the resulting CERT, and corresponding key, would be written in the
+    following location:
+
+    /etc/pki/tls/certs/test.egavas.org.crt
+    /etc/pki/tls/certs/test.egavas.org.key
+    '''
+
+    if not os.path.exists('{0}/{1}/certs/'.format(_cert_base_path(), tls_dir)):
+        os.makedirs("{0}/{1}/certs/".format(_cert_base_path(), tls_dir))
+
+    if os.path.exists(
+            '{0}/{1}/certs/{2}.crt'.format(_cert_base_path(), tls_dir, CN)
+            ):
+        return 'Certificate "{0}" already exists'.format(CN)
+
+    key = OpenSSL.crypto.PKey()
+    key.generate_key(OpenSSL.crypto.TYPE_RSA, bits)
+
+    # create certificate
+    cert = OpenSSL.crypto.X509()
+    cert.set_version(3)
+
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(int(days) * 24 * 60 * 60)
+
+    cert.get_subject().C = C
+    cert.get_subject().ST = ST
+    cert.get_subject().L = L
+    cert.get_subject().O = O
+    if OU:
+        cert.get_subject().OU = OU
+    cert.get_subject().CN = CN
+    cert.get_subject().emailAddress = emailAddress
+
+    cert.set_serial_number(_new_serial(tls_dir, CN))
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(key)
+    cert.sign(key, 'sha1')
+
+    # Write private key and cert
+    priv_key = open(
+            '{0}/{1}/certs/{2}.key'.format(_cert_base_path(), tls_dir, CN),
+            'w+'
+            )
+    priv_key.write(
+            OpenSSL.crypto.dump_privatekey(OpenSSL.crypto.FILETYPE_PEM, key)
+            )
+    priv_key.close()
+
+
+    crt = open('{0}/{1}/certs/{2}.crt'.format(
+        _cert_base_path(),
+        tls_dir,
+        CN
+        ), 'w+')
+    crt.write(
+            OpenSSL.crypto.dump_certificate(
+                OpenSSL.crypto.FILETYPE_PEM,
+                cert
+                )
+            )
+    crt.close()
+
+    _write_cert_to_database(tls_dir, cert)
+
+    ret = 'Created Private Key: {0}/{1}/certs/{2}.key. '.format(
+        _cert_base_path(),
+        tls_dir,
+        CN)
+    ret += 'Created Certificate: {0}/{1}/certs/{2}.crt.'.format(
+        _cert_base_path(),
+        tls_dir,
+        CN)
+
+    return ret
 
 def create_ca_signed_cert(ca_name, CN, days=365):
     '''
     Create a Certificate (CERT) signed by a
-    particular Certificate Authority (CA)
+    named Certificate Authority (CA)
 
     ca_name
         name of the CA
@@ -544,16 +656,7 @@ def create_pkcs12(ca_name, CN, passphrase=''):
                     )
 
 if __name__ == '__main__':
-    create_ca(
-            'koji',
-            days=365,
-            CN='localhost',
-            C='US',
-            ST='Utah',
-            L='Salt Lake City',
-            O='Salt Stack',
-            emailAddress='salt@saltstack.org'
-            )
+    create_ca('koji', days=365, **cert_sample_meta)
     create_csr(
             'koji',
             CN='test_system',

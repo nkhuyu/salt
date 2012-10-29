@@ -9,12 +9,12 @@ import sys
 # Import salt components
 import salt.cli.caller
 import salt.cli.cp
-import salt.cli.key
 import salt.cli.batch
 import salt.client
 import salt.output
 import salt.runner
 import salt.auth
+import salt.key
 
 from salt.utils import parsers
 from salt.utils.verify import verify_env
@@ -196,7 +196,7 @@ class SaltKey(parsers.SaltKeyOptionParser):
 
         self.setup_logfile_logger()
 
-        key = salt.cli.key.Key(self.config)
+        key = salt.key.KeyCLI(self.config)
         key.run()
 
 
