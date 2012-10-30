@@ -10,18 +10,14 @@ import integration
 from integration import TestDaemon
 
 
-class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
+class KeyTest(integration.ShellCase,
+              integration.QueryRunningMinionsMixIn,
+              integration.ShellCaseCommonTestsMixIn):
     '''
     Test salt-key script
     '''
 
     _call_binary_ = 'salt-key'
-
-    def setUp(self):
-        super(KeyTest, self).setUp()
-        self.all_minions = [
-            m for m in os.environ.get('SALT_VG_MACHINES', '').split('|') if m
-        ]
 
     def test_list(self):
         '''
@@ -29,10 +25,11 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L')
         expect = [
-                'Unaccepted Keys:',
-                'Accepted Keys:',
-                ] + sorted(self.all_minions) + [
-                'Rejected:', '']
+            'Accepted Keys:',
+            ] + self.get_running_minions() + [
+            'Unaccepted Keys:',
+            'Rejected Keys:', ''
+        ]
         self.assertEqual(data, expect)
 
     def test_list_json_out(self):
@@ -40,13 +37,15 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         test salt-key -L --json-out
         '''
         data = self.run_key('-L --json-out')
+
         expect = [
             '{',
-            '    "unaccepted": [], ',
-            '    "accepted": [' + [
-            '        "{0}", '.format(m) for m in self.all_minions] + [
-            '    ], ',
-            '    "rejected": []',
+            '    "minions_rejected": [], ',
+            '    "minions_pre": [], ',
+            '    "minions": [' ] + ', \n'.join([
+            '        "{0}"'.format(m) for m in self.get_running_minions()
+            ]).split('\n') + [
+            '    ]',
             '}',
             ''
         ]
@@ -58,11 +57,10 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L --yaml-out')
         expect = [
-            'accepted: [{0}]'.format(', '.join(self.all_minions)),
-            'rejected: []',
-            'unaccepted: []',
+            'minions: [{0}]'.format(', '.join(self.get_running_minions())),
+            'minions_pre: []',
+            'minions_rejected: []',
             '',
-            ''
         ]
         self.assertEqual(data, expect)
 
@@ -72,11 +70,9 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-L --raw-out')
         expect = [
-            "{'accepted': [" +
-            ', '.join([repr(m) for m in self.all_minions]) +
-            "], 'rejected': [], 'unaccepted': []}",
-            ''
-        ]
+            "{'minions': [" +
+            ', '.join([repr(m) for m in self.get_running_minions()]) +
+            "],", " 'minions_pre': [],", " 'minions_rejected': []}", '']
         self.assertEqual(data, expect)
 
     def test_list_acc(self):
@@ -86,7 +82,7 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         data = self.run_key('-l acc')
         self.assertEqual(
             data,
-            sorted(self.all_minions) + ['']
+            ['Accepted Keys:'] + self.get_running_minions() + ['']
         )
 
     def test_list_un(self):
@@ -95,26 +91,27 @@ class KeyTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         '''
         data = self.run_key('-l un')
         self.assertEqual(
-                data,
-                ['']
-                )
+            data,
+            ['Unaccepted Keys:', '']
+        )
 
     def test_keys_generation(self):
         tempdir = tempfile.mkdtemp()
-        arg_str = '--gen-keys minion --gen-keys-dir {0}'.format(tempdir)
-        data = self.run_key(arg_str)
+        arg_str = '--gen-keys minibar --gen-keys-dir {0}'.format(tempdir)
+        self.run_key(arg_str)
         try:
-            self.assertIn('Keys generation complete', data)
+            for fname in ('minibar.pub', 'minibar.pem'):
+                self.assertTrue(os.path.isfile(os.path.join(tempdir, fname)))
         finally:
             shutil.rmtree(tempdir)
 
-
     def test_keys_generation_no_configdir(self):
         tempdir = tempfile.mkdtemp()
-        arg_str = '--gen-keys minion --gen-keys-dir {0}'.format(tempdir)
-        data = self.run_script('salt-key', arg_str)
+        arg_str = '--gen-keys minibar --gen-keys-dir {0}'.format(tempdir)
+        self.run_script('salt-key', arg_str)
         try:
-            self.assertIn('Keys generation complete', data)
+            for fname in ('minibar.pub', 'minibar.pem'):
+                self.assertTrue(os.path.isfile(os.path.join(tempdir, fname)))
         finally:
             shutil.rmtree(tempdir)
 
