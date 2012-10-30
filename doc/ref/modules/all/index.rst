@@ -1,8 +1,8 @@
 .. _all-salt.modules:
 
-============================
-Full list of builtin modules
-============================
+======================================
+Full list of builtin execution modules
+======================================
 
 .. admonition:: Virtual modules
 
@@ -26,13 +26,13 @@ Full list of builtin modules
     bluez
     brew
     butterkvm
-    ca
     cassandra
     cluster
     cmdmod
     config
     cp
     cron
+    daemontools
     data
     debconfmod
     debian_service
@@ -105,6 +105,7 @@ Full list of builtin modules
     supervisord
     systemd
     test
+    tls
     tomcat
     upstart
     useradd

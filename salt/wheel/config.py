@@ -25,10 +25,15 @@ def values():
 def apply(key, value):
     '''
     Set a single key 
+
+    .. note::
+
+        This will strip comments from your config file
     '''
     path = __opts__['conf_file']
     if os.path.isdir(path):
         path = os.path.join(path, 'master')
     data = values()
     data[key] = value
-    yaml.dump(data, default_flow_style=False)
+    with open(path, 'w+') as fp_ :
+        fp_.write(yaml.dump(data, default_flow_style=False))
