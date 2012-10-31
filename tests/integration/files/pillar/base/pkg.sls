@@ -1,5 +1,6 @@
 pkg:
   {% if grains['os_family'] == 'RedHat' %}
+  git: git
   vim: vim-enhanced
   supervisor: supervisor
   python-mock: python-mock
@@ -11,7 +12,8 @@ pkg:
   python-dev: libpython-devel
     {% endif %}
 
-  {% if grains['os_family'] == 'Debian' %}
+  {% elif grains['os_family'] == 'Debian' %}
+  git: git-core
   vim: vim
   supervisor: supervisor
   python-mock: python-mock
@@ -19,6 +21,7 @@ pkg:
   python-dev: python-dev
 
   {% elif grains['os'] == 'Arch' %}
+  git: git
   vim: vim
   supervisor: supervisor
   python-mock: python2-mock

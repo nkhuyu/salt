@@ -1,21 +1,17 @@
-git:
+{{ pillar['pkg']['git'] }}:
   pkg.installed
 
-supervisor:
+{{ pillar['pkg']['supervisor'] }}:
   pkg.installed
 
-python-mock:
+{{ pillar['pkg']['python-mock'] }}:
   pkg.installed
 
-python-virtualenv:
+{{ pillar['pkg']['python-virtualenv'] }}:
   pkg.installed
 
 {% if grains['os'] not in ('Arch',) %}
-  {% if grains['os'] == 'Fedora' %}
-python-devel:
-  {% else %}
-python-dev:
-  {% endif %}
+{{ pillar['pkg']['python-dev'] }}:
   pkg.installed
 {% endif %}
 
@@ -28,7 +24,7 @@ python-dev:
     - system_site_packages: True
     - mirrors: http://testpypi.python.org/pypi
     - require:
-      - pkg: python-virtualenv
+      - pkg: {{ pillar['pkg']['python-virtualenv'] }}
 
 ve-saltdevel-install:
   cmd.run:
@@ -40,8 +36,8 @@ ve-saltdevel-install:
     - unless: test -d /tmp/ve/bin
     - require:
       - virtualenv: /tmp/ve
-      - pkg: supervisor
-      - pkg: python-mock
+      - pkg: {{ pillar['pkg']['supervisor'] }}
+      - pkg: {{ pillar['pkg']['python-mock'] }}
 
 #/home/vagrant/.bashrc:
 #  file.append:
@@ -55,12 +51,8 @@ coverage:
     - runas: vagrant
     - bin_env: /tmp/ve
     - require:
-      - pkg: git
-    {% if grains['os'] == 'Fedora' %}
-      - pkg: python-devel
-    {% else %}
-      - pkg: python-dev
-    {% endif %}
+      - pkg: {{ pillar['pkg']['git'] }}
+      - pkg: {{ pillar['pkg']['python-dev'] }}
       - virtualenv: /tmp/ve
 
 unittest-xml-reporting:
