@@ -1,8 +1,0 @@
-sudo kill -KILL $(ps aux | grep python | grep "runtests" | awk '{print $2}')
-CMD=""; PIDS=$(ps aux | grep python | grep -E -w "runtests|salt-m" | awk '{print $2}'); for p in $PIDS; do CMD="$CMD -p $p"; done; eval "sudo strace -f -e trace=write -e verbose=none -e write=1,2 -q $CMD"
-sudo salt-call state.sls extra
-sudo rm /etc/salt/pki/minion_master.pub
-sudo multitail /var/log/salt/minion /tmp/salt-runtests.log
-sudo tail -f /var/log/salt/minion
-sudo service salt-minion restart
-sudo tail -f /tmp/salt-runtests.log
