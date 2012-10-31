@@ -1,0 +1,8 @@
+source "http://rubygems.org"
+
+#ruby=ruby-1.9.2-p320@salt
+
+# For veewee
+gem 'vagrant'
+gem 'vagrant-salt', '>=0.1.3'
+
