@@ -43,7 +43,7 @@ class KeyTest(integration.ShellCase,
             '{',
             '    "minions_rejected": [], ',
             '    "minions_pre": [], ',
-            '    "minions": [' ] + ', \n'.join([
+            '    "minions": ['] + ', \n'.join([
             '        "{0}"'.format(m) for m in self.get_running_minions()
             ]).split('\n') + [
             '    ]',
@@ -58,7 +58,8 @@ class KeyTest(integration.ShellCase,
         '''
         data = self.run_key('-L --yaml-out')
         expect = [
-            'minions: [{0}]'.format(', '.join(self.get_running_minions())),
+            'minions:' ] + [
+            '- {0}'.format(m) for m in self.get_running_minions() ] + [
             'minions_pre: []',
             'minions_rejected: []',
             '',
@@ -70,10 +71,13 @@ class KeyTest(integration.ShellCase,
         test salt-key -L --raw-out
         '''
         data = self.run_key('-L --raw-out')
+        running = self.get_running_minions()
+        last = running.pop(-1)
         expect = [
-            "{'minions': [" +
-                ', '.join([repr(m) for m in self.get_running_minions()]) +
-            "],",
+            "{'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
+                '             {0!r},'.format(m) for m in running
+                ] + [
+            "             {0!r}],".format(last),
             " 'minions_pre': [],",
             " 'minions_rejected': []}",
             ''
