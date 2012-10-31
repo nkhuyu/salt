@@ -58,8 +58,8 @@ class KeyTest(integration.ShellCase,
         '''
         data = self.run_key('-L --yaml-out')
         expect = [
-            'minions:' ] + [
-            '- {0}'.format(m) for m in self.get_running_minions() ] + [
+            'minions:'] + [
+            '- {0}'.format(m) for m in self.get_running_minions()] + [
             'minions_pre: []',
             'minions_rejected: []',
             '',
@@ -139,7 +139,8 @@ class KeyTest(integration.ShellCase,
                 arg_str + ' --keysize=32769', catch_stderr=True
             )
             self.assertIn(
-                'salt-key: error: The maximum value for keysize is 32768', error
+                'salt-key: error: The maximum value for keysize is 32768',
+                error
             )
         finally:
             shutil.rmtree(tempdir)
