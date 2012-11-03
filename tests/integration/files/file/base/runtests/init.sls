@@ -1,18 +1,12 @@
-{{ pillar['pkg']['git'] }}:
-  pkg.installed
-
-{{ pillar['pkg']['supervisor'] }}:
-  pkg.installed
-
-{{ pillar['pkg']['python-mock'] }}:
-  pkg.installed
-
-{{ pillar['pkg']['python-virtualenv'] }}:
-  pkg.installed
-
+runtests-pkg-deps:
+  pkg.installed:
+    - names:
+      - {{ pillar['pkg']['git'] }}
+      - {{ pillar['pkg']['supervisor'] }}
+      - {{ pillar['pkg']['python-mock'] }}
+      - {{ pillar['pkg']['python-virtualenv'] }}
 {% if grains['os'] not in ('Arch',) %}
-{{ pillar['pkg']['python-dev'] }}:
-  pkg.installed
+      - {{ pillar['pkg']['python-dev'] }}
 {% endif %}
 
 
@@ -21,7 +15,7 @@
     - runas: vagrant
     - distribute: True
     - no_site_packages: False
-    - system_site_packages: True
+    #- system_site_packages: True
     - mirrors: http://testpypi.python.org/pypi
     - require:
       - pkg: {{ pillar['pkg']['python-virtualenv'] }}
@@ -54,6 +48,16 @@ coverage:
       - pkg: {{ pillar['pkg']['git'] }}
       - pkg: {{ pillar['pkg']['python-dev'] }}
       - virtualenv: /tmp/ve
+
+{% if (grains['pythonversion'][0]|int, grains['pythonversion'][1]|int) < (2, 7) %}
+unittest2:
+  pip.installed:
+    - name: unittest2
+    - runas: vagrant
+    - bin_env: /tmp/ve
+    - require:
+      - virtualenv: /tmp/ve
+{% endif %}
 
 unittest-xml-reporting:
   pip.installed:
