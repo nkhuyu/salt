@@ -64,7 +64,9 @@ def lookup_jid(jid):
     ret = {}
     for mid, data in client.get_full_returns(jid, [], 0).items():
         ret[mid] = data.get('ret')
-        salt.output.display_output({mid: ret[mid]}, data.get('out', None))
+        salt.output.display_output(
+            {mid: ret[mid]}, data.get('out', None), __opts__
+        )
 
     return ret
 
