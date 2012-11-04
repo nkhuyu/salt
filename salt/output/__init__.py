@@ -27,7 +27,7 @@ def get_printout(out, opts=None, **kwargs):
     Return a printer function
     '''
     for outputter in STATIC:
-        if outputter in opts:
+        if opts and outputter in opts:
             if opts[outputter]:
                 if outputter == 'text_out':
                     out = 'txt'
