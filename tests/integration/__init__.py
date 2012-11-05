@@ -164,9 +164,11 @@ class TestDaemon(object):
 
         # Point the config values to the correct temporary paths
         for name in ('hosts', 'aliases'):
-            self.master_opts['{0}.file'.format(name)] = os.path.join(TMP, name)
-            self.minion_opts['{0}.file'.format(name)] = os.path.join(TMP, name)
-            self.sub_minion_opts['{0}.file'.format(name)] = os.path.join(TMP, name)
+            optname = '{0}.file'.format(name)
+            optname_path = os.path.join(TMP, name)
+            self.master_opts[optname] = optname_path
+            self.minion_opts[optname] = optname_path
+            self.sub_minion_opts[optname] = optname_path
 
         verify_env([os.path.join(self.master_opts['pki_dir'], 'minions'),
                     os.path.join(self.master_opts['pki_dir'], 'minions_pre'),
@@ -287,7 +289,10 @@ class TestDaemon(object):
             shutil.rmtree(TMP)
 
 
-class VagrantMachineException(Exception): pass
+class VagrantMachineException(Exception):
+    """
+    Simple exception to catch some errors while starting the vagrant machines
+    """
 
 
 class VagrantTestDaemon(TestDaemon):
@@ -492,7 +497,7 @@ class VagrantTestDaemon(TestDaemon):
                         continue
 
                     print
-                    if idx+1 % 2:
+                    if idx + 1 % 2:
                         print(get_colors(True)['LIGHT_BLUE'])
                     print_header(
                         '  {0} ~ Remote Test Results ~ {1}  '.format(
@@ -505,7 +510,7 @@ class VagrantTestDaemon(TestDaemon):
                     print(output['stdout'])
 
                     print_header('~', inline=True)
-                    if idx+1 % 2:
+                    if idx + 1 % 2:
                         print(get_colors(True)['ENDC'])
 
             if not running:
@@ -689,7 +694,7 @@ class ModuleCase(TestCase):
             pass
         else:
             if isinstance(res, dict):
-                if res['result'] == True:
+                if res['result'] is True:
                     return
                 if 'comment' in res:
                     raise AssertionError(res['comment'])
@@ -859,3 +864,21 @@ class ShellCaseCommonTestsMixIn(object):
         out = '\n'.join(self.run_script(self._call_binary_, "--version"))
         self.assertIn(self._call_binary_, out)
         self.assertIn(salt.__version__, out)
+
+
+class QueryRunningMinionsMixIn(object):
+    __running_minions = None
+
+    def get_running_minions(self):
+        if self.__running_minions is None:
+            client = salt.client.LocalClient(
+                os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
+            )
+            targets = client.cmd('*', 'test.ping', timeout=5)
+            if 'minion' in targets and 'sub_minion' in targets:
+                # We need at least minion and sub_minion which are local
+                self.__running_minions = salt.utils.isorted([
+                    name for (name, running) in targets.iteritems()
+                    if running is True
+                ])
+        return self.__running_minions or []
