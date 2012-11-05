@@ -26,7 +26,7 @@ class CallTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
                   '  - 1',
                   '  - 1',
                   '  - 2']
-        self.assertEqual(expect, out[:-2])
+        self.assertEqual(expect, out[:-1])
 
     def test_text_output(self):
         out = self.run_call('--text-out test.fib 3')
