@@ -25,7 +25,7 @@ class CallTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
                   '- - 0',
                   '  - 1',
                   '  - 1',
-                  '  - 2',]
+                  '  - 2']
         self.assertEqual(expect, out[:-2])
 
     def test_text_output(self):

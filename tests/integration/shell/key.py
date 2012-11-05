@@ -28,8 +28,7 @@ class KeyTest(integration.ShellCase,
             'Accepted Keys:',
             ] + self.get_running_minions() + [
             'Unaccepted Keys:',
-            'Rejected Keys:',
-            ''
+            'Rejected Keys:'
         ]
         self.assertEqual(data, expect)
 
@@ -48,7 +47,6 @@ class KeyTest(integration.ShellCase,
             ]).split('\n') + [
             '    ]',
             '}',
-            ''
         ]
         self.assertEqual(data, expect)
 
@@ -62,7 +60,6 @@ class KeyTest(integration.ShellCase,
             '- {0}'.format(m) for m in self.get_running_minions()] + [
             'minions_pre: []',
             'minions_rejected: []',
-            '',
         ]
         self.assertEqual(data, expect)
 
@@ -80,7 +77,6 @@ class KeyTest(integration.ShellCase,
             "             {0!r}],".format(last),
             " 'minions_pre': [],",
             " 'minions_rejected': []}",
-            ''
         ]
         self.assertEqual(data, expect)
 
@@ -91,7 +87,7 @@ class KeyTest(integration.ShellCase,
         data = self.run_key('-l acc')
         self.assertEqual(
             data,
-            ['Accepted Keys:'] + self.get_running_minions() + ['']
+            ['Accepted Keys:'] + self.get_running_minions()
         )
 
     def test_list_un(self):
@@ -101,7 +97,7 @@ class KeyTest(integration.ShellCase,
         data = self.run_key('-l un')
         self.assertEqual(
             data,
-            ['Unaccepted Keys:', '']
+            ['Unaccepted Keys:']
         )
 
     def test_keys_generation(self):
