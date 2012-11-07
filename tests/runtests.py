@@ -18,6 +18,7 @@ try:
 except ImportError:
     xmlrunner = None
 
+
 CWD = os.getcwd()
 LOGFILE = os.path.join(tempfile.gettempdir(), 'salt-runtests.log')
 TEST_DIR = os.path.dirname(os.path.normpath(os.path.abspath(__file__)))
@@ -25,6 +26,9 @@ COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 COVERAGE_REPORT = os.path.join(TEST_DIR, 'coverage-report')
 
 SALT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+
+REQUIRED_OPEN_FILES = 3072
+TEST_RESULTS = []
 
 try:
     if SALT_ROOT:
@@ -52,10 +56,6 @@ except ImportError:
 # Import salt libs
 import saltunittest
 from integration import PNUM, print_header
-
-
-REQUIRED_OPEN_FILES = 2048
-TEST_RESULTS = []
 
 
 class STDOutWrapper(object):
@@ -285,6 +285,11 @@ def parse_opts():
             default=False,
             action='store_true',
             help='Do NOT show the overall tests result')
+    parser.add_option('--sysinfo',
+            default=False,
+            action='store_true',
+            help='Print some system information.'
+    )
 
     coverage_group = optparse.OptionGroup(
         parser,

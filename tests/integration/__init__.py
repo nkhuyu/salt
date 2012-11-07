@@ -26,6 +26,14 @@ from salt.utils import get_colors
 from salt.utils.verify import verify_env
 from saltunittest import TestCase
 
+try:
+    import console
+    width, height = console.getTerminalSize()
+    PNUM = width
+except:
+    PNUM = 70
+
+
 INTEGRATION_TEST_DIR = os.path.dirname(
     os.path.normpath(os.path.abspath(__file__))
 )
@@ -34,10 +42,12 @@ SCRIPT_DIR = os.path.join(CODE_DIR, 'scripts')
 
 PYEXEC = 'python{0}.{1}'.format(sys.version_info[0], sys.version_info[1])
 
-TMP = os.path.join(tempfile.gettempdir(), 'salt-tests-tmpdir')
+SYS_TMP_DIR = tempfile.gettempdir()
+TMP = os.path.join(SYS_TMP_DIR, 'salt-tests-tmpdir')
 FILES = os.path.join(INTEGRATION_TEST_DIR, 'files')
 MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
 COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
+MINIONS_CONNECT_TIMEOUT = MINIONS_SYNC_TIMEOUT = 60
 
 try:
     import console
@@ -217,9 +227,67 @@ class TestDaemon(object):
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
 
+        #if os.environ.get('DUMP_SALT_CONFIG', None) is not None:
+        #    try:
+        #        import yaml
+        #        os.makedirs('/tmp/salttest/conf')
+        #    except OSError:
+        #        pass
+        #    self.master_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
+        #    self.minion_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
+        #    open('/tmp/salttest/conf/master', 'w').write(
+        #        yaml.dump(self.master_opts)
+        #    )
+        #    open('/tmp/salttest/conf/minion', 'w').write(
+        #        yaml.dump(self.minion_opts)
+        #    )
+
+        # Let's create a local client to ping and sync minions
         self.client = salt.client.LocalClient(
             os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
         )
+
+        evt_minions_connect = multiprocessing.Event()
+        evt_minions_sync = multiprocessing.Event()
+        minion_targets = set(['minion', 'sub_minion'])
+
+        # Wait for minions to connect back
+        wait_minions_connection = multiprocessing.Process(
+            target=self.__wait_for_minions_connections,
+            args=(evt_minions_connect, minion_targets)
+        )
+        wait_minions_connection.start()
+        if evt_minions_connect.wait(MINIONS_CONNECT_TIMEOUT) is False:
+            print('WARNING: Minions failed to connect back. Tests requiring '
+                  'them WILL fail')
+        wait_minions_connection.terminate()
+        del(evt_minions_connect, wait_minions_connection)
+
+        # Wait for minions to "sync_all"
+        sync_minions = multiprocessing.Process(
+            target=self.__sync_minions,
+            args=(evt_minions_sync, minion_targets)
+        )
+        sync_minions.start()
+        if evt_minions_sync.wait(MINIONS_SYNC_TIMEOUT) is False:
+            print('WARNING: Minions failed to sync. Tests requiring the '
+                  'testing `runtests_helper` module WILL fail')
+        sync_minions.terminate()
+        del(evt_minions_sync, sync_minions)
+
+        if self.opts.sysinfo:
+            from salt import version
+            print_header('~~~~~~~ Versions Report ', inline=True)
+            print('\n'.join(version.versions_report()))
+
+            print_header(
+                '~~~~~~~ Minion Grains Information ', inline=True,
+            )
+            grains = self.client.cmd('minion', 'grains.items')
+            import pprint
+            pprint.pprint(grains['minion'])
+
+        print_header('', sep='=', inline=True)
 
         return self
 
@@ -287,6 +355,56 @@ class TestDaemon(object):
             shutil.rmtree(self.smaster_opts['root_dir'])
         if os.path.isdir(TMP):
             shutil.rmtree(TMP)
+
+    def __wait_for_minions_connections(self, evt, targets):
+        print_header(
+            'Waiting at most {0} secs for local minions to connect '
+            'back and another {1} secs for them to '
+            '"saltutil.sync_all()"'.format(
+                MINIONS_CONNECT_TIMEOUT, MINIONS_SYNC_TIMEOUT
+            ), sep='=', centered=True
+        )
+        targets = set(['minion', 'sub_minion'])
+        expected_connections = set(targets)
+        while True:
+            # If enough time passes, a timeout will be triggered by
+            # multiprocessing.Event, so, we can have this while True here
+            targets = self.client.cmd('*', 'test.ping')
+            for target in targets:
+                if target not in expected_connections:
+                    # Someone(minion) else "listening"?
+                    continue
+                expected_connections.remove(target)
+                print('  * {0} minion connected'.format(target))
+            if not expected_connections:
+                # All expected connections have connected
+                break
+            time.sleep(1)
+        evt.set()
+
+    def __sync_minions(self, evt, targets):
+        # Let's sync all connected minions
+        print('  * Syncing local minion\'s dynamic data(saltutil.sync_all)')
+        syncing = set(targets)
+        jid_info = self.client.run_job(
+            ','.join(targets), 'saltutil.sync_all',
+            expr_form='list',
+            timeout=9999999999999999,
+        )
+
+        while syncing:
+            rdata = self.client.get_returns(jid_info['jid'], syncing, 1)
+            if rdata:
+                for idx, (name, output) in enumerate(rdata.iteritems()):
+                    print('    * Synced {0}: {1}'.format(name, output))
+                    # Synced!
+                    try:
+                        syncing.remove(name)
+                    except KeyError:
+                        print('    * {0} already synced???  {1}'.format(
+                            name, output
+                        ))
+        evt.set()
 
 
 class VagrantMachineException(Exception):
@@ -603,14 +721,16 @@ class ModuleCase(TestCase):
     '''
     Execute a module function
     '''
-    def setUp(self):
-        '''
-        Generate the tools to test a module
-        '''
-        super(ModuleCase, self).setUp()
-        self.client = salt.client.LocalClient(
-            os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
-        )
+
+    _client = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = salt.client.LocalClient(
+                os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
+            )
+        return self._client
 
     def minion_run(self, _function, *args, **kw):
         '''
@@ -771,14 +891,29 @@ class ShellCase(TestCase):
             # Force closing stderr/stdout to release file descriptors
             process.stdout.close()
             process.stderr.close()
-            return out.splitlines(), err.splitlines()
+            try:
+                return out.splitlines(), err.splitlines()
+            finally:
+                try:
+                    process.terminate()
+                except OSError, err:
+                    # process already terminated
+                    pass
 
         process = subprocess.Popen(
             cmd, shell=True, stdout=subprocess.PIPE
         )
         data = process.communicate()
         process.stdout.close()
-        return data[0].splitlines()
+
+        try:
+            return data[0].splitlines()
+        finally:
+            try:
+                process.terminate()
+            except OSError, err:
+                # process already terminated
+                pass
 
     def run_salt(self, arg_str):
         '''

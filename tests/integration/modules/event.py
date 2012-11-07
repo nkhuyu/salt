@@ -24,7 +24,7 @@ class EventModuleTest(integration.ModuleCase):
         def get_event(events):
             me = event.MasterEvent(self.master_opts['sock_dir'])
             events.put_nowait(
-                me.get_event(wait=5, tag='salttest', full=False)
+                me.get_event(wait=10, tag='salttest', full=False)
             )
 
         threading.Thread(target=get_event, args=(events,)).start()
@@ -36,7 +36,7 @@ class EventModuleTest(integration.ModuleCase):
         )
         self.assertTrue(ret)
 
-        eventfired = events.get(block=True, timeout=3)
+        eventfired = events.get(block=True, timeout=10)
         self.assertIn(
             'event.fire_master: just test it!!!!',
             eventfired['data']
@@ -49,7 +49,7 @@ class EventModuleTest(integration.ModuleCase):
         self.assertTrue(ret)
 
         with self.assertRaises(Empty):
-            eventfired = events.get(block=True, timeout=3)
+            eventfired = events.get(block=True, timeout=10)
 
     def test_event_fire(self):
         events = Queue()
@@ -57,7 +57,7 @@ class EventModuleTest(integration.ModuleCase):
         def get_event(events):
             me = event.MinionEvent(**self.minion_opts)
             events.put_nowait(
-                me.get_event(wait=5, tag='salttest', full=False)
+                me.get_event(wait=10, tag='salttest', full=False)
             )
 
         threading.Thread(target=get_event, args=(events,)).start()
@@ -68,7 +68,7 @@ class EventModuleTest(integration.ModuleCase):
         )
         self.assertTrue(ret)
 
-        eventfired = events.get(block=True, timeout=5)
+        eventfired = events.get(block=True, timeout=10)
         self.assertIn('event.fire: just test it!!!!', eventfired)
 
         ret = self.run_function(
@@ -77,7 +77,7 @@ class EventModuleTest(integration.ModuleCase):
         self.assertTrue(ret)
 
         with self.assertRaises(Empty):
-            eventfired = events.get(block=True, timeout=3)
+            eventfired = events.get(block=True, timeout=10)
 
     def test_event_fire_ipc_mode_tcp(self):
         events = Queue()
@@ -85,7 +85,7 @@ class EventModuleTest(integration.ModuleCase):
         def get_event(events):
             me = event.MinionEvent(**self.sub_minion_opts)
             events.put_nowait(
-                me.get_event(wait=5, tag='salttest', full=False)
+                me.get_event(wait=10, tag='salttest', full=False)
             )
 
         threading.Thread(target=get_event, args=(events,)).start()
@@ -97,7 +97,7 @@ class EventModuleTest(integration.ModuleCase):
         )
         self.assertTrue(ret)
 
-        eventfired = events.get(block=True, timeout=5)
+        eventfired = events.get(block=True, timeout=10)
         self.assertIn('event.fire: just test it!!!!', eventfired)
 
         ret = self.run_function(
@@ -107,7 +107,7 @@ class EventModuleTest(integration.ModuleCase):
         self.assertTrue(ret)
 
         with self.assertRaises(Empty):
-            eventfired = events.get(block=True, timeout=3)
+            eventfired = events.get(block=True, timeout=10)
 
 
 if __name__ == '__main__':
