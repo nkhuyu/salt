@@ -41,6 +41,7 @@ import salt.state
 import salt.runner
 import salt.auth
 import salt.wheel
+import salt.minion
 import salt.utils.atomicfile
 import salt.utils.event
 import salt.utils.verify
@@ -525,6 +526,8 @@ class AESFuncs(object):
         self.tops = salt.loader.tops(self.opts)
         # Make a client
         self.local = salt.client.LocalClient(self.opts['conf_file'])
+        # Create the master minion to access the external job cache
+        self.mminion = salt.minion.MasterMinion(self.opts)
 
     def __find_file(self, path, env='base'):
         '''
@@ -994,6 +997,16 @@ class AESFuncs(object):
                         ),
                     'w+')
                 )
+        # Save the load to the ext_job_cace if it is turned on
+        if self.opts['ext_job_cache']:
+            try:
+                fstr = '{0}.save_load'.format(self.opts['ext_job_cache'])
+                self.mminion.returners[fstr](clear_load['jid'], clear_load)
+            except KeyError:
+                msg = ('The specified returner used for the external job '
+                       'cache "{0}" does not have a save_load function!'
+                       ).format(self.opts['ext_job_cache'])
+                log.critical(msg)
         payload = {'enc': 'aes'}
         expr_form = 'glob'
         timeout = 5
@@ -1113,6 +1126,8 @@ class ClearFuncs(object):
         self.ckminions = salt.utils.minions.CkMinions(opts)
         # Make an Auth object
         self.loadauth = salt.auth.LoadAuth(opts)
+        # Stand up the master Minion to access returner data
+        self.mminion = salt.minion.MasterMinion(self.opts)
         # Make a wheel object
         self.wheel_ = salt.wheel.Wheel(opts)
 
@@ -1568,6 +1583,15 @@ class ClearFuncs(object):
                 clear_load,
                 open(os.path.join(jid_dir, '.load.p'), 'w+')
                 )
+        if self.opts['ext_job_cache']:
+            try:
+                fstr = '{0}.save_load'.format(self.opts['ext_job_cache'])
+                self.mminion.returners[fstr](clear_load['jid'], clear_load)
+            except KeyError:
+                msg = ('The specified returner used for the external job '
+                       'cache "{0}" does not have a save_load function!'
+                       ).format(self.opts['ext_job_cache'])
+                log.critical(msg)
         # Set up the payload
         payload = {'enc': 'aes'}
         # Altering the contents of the publish load is serious!! Changes here

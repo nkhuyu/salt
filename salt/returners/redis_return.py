@@ -46,6 +46,25 @@ def returner(ret):
     serv.sadd('minions', ret['id'])
 
 
+def save_load(jid, load):
+    '''
+    Save the load to the speified jib id
+    '''
+    serv = _get_serv()
+    serv.set(jid, json.dumps(load))
+
+
+def get_load(jid):
+    '''
+    Return the load data that marks a specified jid
+    '''
+    serv = _get_serv()
+    data = serv.get(jid)
+    if data:
+        return json.loads(data)
+    return {}
+
+
 def get_jid(jid):
     '''
     Return the information returned when the specified job id was executed
