@@ -557,54 +557,36 @@ class ShellCase(TestCase):
         ppath = 'PYTHONPATH={0}:{1}'.format(CODE_DIR, ':'.join(sys.path[1:]))
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
+        fdo, outfilepath = tempfile.mkstemp(dir=TMP)
         if catch_stderr:
-            process = subprocess.Popen(
-                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            if sys.version_info[0:2] < (2, 7):
-                # On python 2.6, the subprocess'es communicate() method uses
-                # select which, is limited by the OS to 1024 file descriptors
-                # We need more available descriptors to run the tests which
-                # need the stderr output.
-                # So instead of .communicate() we wait for the process to
-                # finish, but, as the python docs state "This will deadlock
-                # when using stdout=PIPE and/or stderr=PIPE and the child
-                # process generates enough output to a pipe such that it
-                # blocks waiting for the OS pipe buffer to accept more data.
-                # Use communicate() to avoid that." <- a catch, catch situation
-                #
-                # Use this work around were it's needed only, python 2.6
-                process.wait()
-                out = process.stdout.read()
-                err = process.stderr.read()
-            else:
-                out, err = process.communicate()
-            # Force closing stderr/stdout to release file descriptors
-            process.stdout.close()
-            process.stderr.close()
-            try:
-                return out.splitlines(), err.splitlines()
-            finally:
-                try:
-                    process.terminate()
-                except OSError, err:
-                    # process already terminated
-                    pass
+            fde, errfilepath = tempfile.mkstemp(dir=TMP)
+            process = subprocess.Popen(cmd, shell=True, stdout=fdo, stderr=fde)
+        else:
+            process = subprocess.Popen(cmd, shell=True, stdout=fdo)
 
-        process = subprocess.Popen(
-            cmd, shell=True, stdout=subprocess.PIPE
-        )
-        data = process.communicate()
-        process.stdout.close()
-
+        process.communicate()
+        #import mmap
         try:
-            return data[0].splitlines()
+            outfile = open(outfilepath, 'r')
+            #mmout = mmap.mmap(fdo, 0)
+            if catch_stderr:
+                errfile = open(errfilepath, 'r')
+            #    mmerr = mmap.mmap(fde, 0)
+                return outfile.read().splitlines(), errfile.read().splitlines()
+                #return (
+                #    [line.rstrip() for line in iter(mmout.readline, "")],
+                #    [line.rstrip() for line in iter(mmerr.readline, "")]
+                #)
+            #return [line.rstrip() for line in iter(mmout.readline)]
+            return outfile.read().splitlines()
         finally:
-            try:
-                process.terminate()
-            except OSError, err:
-                # process already terminated
-                pass
+            outfile.close()
+            os.unlink(outfilepath)
+            #mmout.close()
+            if catch_stderr:
+                errfile.close()
+                os.unlink(errfilepath)
+                #mmerr.close()
 
     def run_salt(self, arg_str):
         '''
