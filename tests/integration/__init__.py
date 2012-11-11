@@ -4,6 +4,7 @@ Set up the Salt integration test suite
 
 # Import Python libs
 import optparse
+import platform
 import multiprocessing
 import os
 import sys
@@ -558,13 +559,21 @@ class ShellCase(TestCase):
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
         fdo, outfilepath = tempfile.mkstemp(dir=TMP)
+        sp_opts = {
+            'shell': True,
+            'stdout': fdo
+        }
+
+        if not platform.system().lower().startswith('win'):
+            sp_opts['close_fds'] = True
+
         if catch_stderr:
             fde, errfilepath = tempfile.mkstemp(dir=TMP)
-            process = subprocess.Popen(cmd, shell=True, stdout=fdo, stderr=fde)
-        else:
-            process = subprocess.Popen(cmd, shell=True, stdout=fdo)
+            sp_opts['stderr'] = fde
 
+        process = subprocess.Popen(cmd, **sp_opts)
         process.communicate()
+
         #import mmap
         try:
             outfile = open(outfilepath, 'r')
@@ -586,7 +595,9 @@ class ShellCase(TestCase):
             if catch_stderr:
                 errfile.close()
                 os.unlink(errfilepath)
+                del(fde)
                 #mmerr.close()
+            del(fdo, process)
 
     def run_salt(self, arg_str):
         '''
