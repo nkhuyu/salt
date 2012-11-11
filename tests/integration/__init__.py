@@ -196,6 +196,7 @@ class TestDaemon(object):
                     ],
                    pwd.getpwuid(os.getuid()).pw_name)
 
+
         # Set up PATH to mockbin
         self._enter_mockbin()
 
@@ -572,11 +573,11 @@ class ShellCase(TestCase):
             sp_opts['stderr'] = subprocess.PIPE
 
         process = subprocess.Popen(cmd, **sp_opts)
-        process.wait()
 
-        out = process.stdout.read()
         if catch_stderr:
-            err = process.stderr.read()
+            out, err = process.communicate()
+        else:
+            out = process.communicate()[0]
 
         # Force closing stderr/stdout to release file descriptors
         process.stdout.close()
@@ -596,7 +597,6 @@ class ShellCase(TestCase):
             del(process, out)
             if catch_stderr:
                 del(err)
-
             print(
                 '\nActive processes: {0}\n'.format(
                     len(subprocess._active)
