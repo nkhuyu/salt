@@ -552,9 +552,24 @@ class ShellCase(TestCase):
         '''
         Execute a script with the given argument string
         '''
+        # Try to run the Popen call under multiprocessing so that we try to
+        # force all system resources to be returned to the system once the call
+        # has finished.
+        result_queue = multiprocessing.Queue()
+        process = multiprocessing.Process(
+            target=self.__run_script,
+            args=(script, arg_str, catch_stderr, result_queue)
+        )
+        process.start()
+        process.join(15*60)   # max 15 minutes
+        return result_queue.get()
+
+    def __run_script(self, script, arg_str, catch_stderr, rq):
         path = os.path.join(SCRIPT_DIR, script)
         if not os.path.isfile(path):
-            return False
+            rq.put(False)
+            return
+
         ppath = 'PYTHONPATH={0}:{1}'.format(CODE_DIR, ':'.join(sys.path[1:]))
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
@@ -578,8 +593,11 @@ class ShellCase(TestCase):
             outfile = open(outfilepath, 'r')
             if catch_stderr:
                 errfile = open(errfilepath, 'r')
-                return outfile.read().splitlines(), errfile.read().splitlines()
-            return outfile.read().splitlines()
+                rq.put((
+                    outfile.read().splitlines(), errfile.read().splitlines()
+                ))
+            rq.put(outfile.read().splitlines())
+            return
         finally:
             outfile.close()
             os.unlink(outfilepath)
