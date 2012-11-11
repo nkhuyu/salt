@@ -597,6 +597,12 @@ class ShellCase(TestCase):
             if catch_stderr:
                 del(err)
 
+            print(
+                '\nActive processes: {0}\n'.format(
+                    len(subprocess._active)
+                )
+            )
+
     def run_salt(self, arg_str):
         '''
         Execute salt
