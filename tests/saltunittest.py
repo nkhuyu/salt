@@ -22,6 +22,7 @@ if sys.version_info[0:2] < (2, 7):
             expectedFailure,
             TestSuite,
             skipIf,
+            TextTestResult
         )
     except ImportError:
         raise SystemExit("You need to install unittest2 to run the salt tests")
@@ -33,6 +34,7 @@ else:
         expectedFailure,
         TestSuite,
         skipIf,
+        TextTestResult
     )
 
 
@@ -51,6 +53,57 @@ def destructiveTest(func):
             cls.skipTest('Destructive tests are disabled')
         return func(cls)
     return wrap
+
+
+from pympler import tracker
+MTRACKER = tracker.SummaryTracker()
+MTRACKER.print_diff(); print
+
+
+class PymplerResultClass(TextTestResult):
+    def startTest(self, test):
+        MTRACKER.print_diff(); print
+        return super(PymplerResultClass, self).startTest(test)
+
+    def addSuccess(self, test):
+        super(PymplerResultClass, self).addSuccess(test)
+        MTRACKER.print_diff(); print
+
+    def addError(self, test, err):
+        super(PymplerResultClass, self).addError(test, err)
+        MTRACKER.print_diff(); print
+
+    def addFailure(self, test, err):
+        super(PymplerResultClass, self).addFailure(test, err)
+        MTRACKER.print_diff(); print
+
+    def addSkip(self, test, reason):
+        super(PymplerResultClass, self).addSkip(test, reason)
+        MTRACKER.print_diff(); print
+
+    def addExpectedFailure(self, test, err):
+        super(TextTestResult, self).addExpectedFailure(test, err)
+        MTRACKER.print_diff(); print
+
+    def addUnexpectedSuccess(self, test):
+        super(TextTestResult, self).addUnexpectedSuccess(test)
+        MTRACKER.print_diff(); print
+
+
+class PymplerTextTestRunner(TextTestRunner):
+    resultclass = PymplerResultClass
+
+#    def run(self, test):
+#        MTRACKER.print_diff()
+#        rv = super(PymplerTextTestRunner, self).run(test)
+#        MTRACKER.print_diff()
+#        return rv
+
+#class TestCase(OTestCase):
+#    def runTest(self):
+#        self.mtracker.print_diff()
+#        super(TestCase, self).run(test)
+#        self.mtracker.print_diff()
 
 
 class TestsLoggingHandler(object):

@@ -6,6 +6,7 @@ Discover all instances of unittest.TestCase in this directory.
 # Import python libs
 import sys
 import os
+import time
 import logging
 import optparse
 import resource
@@ -57,7 +58,8 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     if opts.xmlout:
         runner = xmlrunner.XMLTestRunner(output='test-reports').run(tests)
     else:
-        runner = saltunittest.TextTestRunner(
+        #runner = saltunittest.TextTestRunner(
+        runner = saltunittest.PymplerTextTestRunner(
             verbosity=opts.verbosity
         ).run(tests)
         TEST_RESULTS.append((header, runner))
@@ -101,7 +103,14 @@ def run_integration_tests(opts):
     if not any([opts.client, opts.module, opts.runner,
                 opts.shell, opts.state, opts.name]):
         return status
+
+    saltunittest.MTRACKER.print_diff(); print
+
     with TestDaemon(opts=opts):
+        time.sleep(1)
+        saltunittest.MTRACKER.print_diff(); print
+        print 'GO!!!!!!!!!!!'
+
         if opts.name:
             for name in opts.name:
                 results = run_suite(opts, '', name)
