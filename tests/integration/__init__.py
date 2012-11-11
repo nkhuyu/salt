@@ -559,10 +559,9 @@ class ShellCase(TestCase):
         ppath = 'PYTHONPATH={0}:{1}'.format(CODE_DIR, ':'.join(sys.path[1:]))
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
-        fdo, outfilepath = tempfile.mkstemp(dir=TMP)
         sp_opts = {
             'shell': True,
-            'stdout': fdo,
+            'stdout': subprocess.PIPE,
             'bufsize': 1     # line buffered
         }
 
@@ -570,38 +569,33 @@ class ShellCase(TestCase):
             sp_opts['close_fds'] = True
 
         if catch_stderr:
-            fde, errfilepath = tempfile.mkstemp(dir=TMP)
-            sp_opts['stderr'] = fde
+            sp_opts['stderr'] = subprocess.PIPE
 
         process = subprocess.Popen(cmd, **sp_opts)
         process.wait()
-        #process.communicate()
+
+        out = process.stdout.read()
+        if catch_stderr:
+            err = process.stderr.read()
+
+        # Force closing stderr/stdout to release file descriptors
+        process.stdout.close()
+        if catch_stderr:
+            process.stderr.close()
 
         try:
-            outfile = open(outfilepath, 'r')
             if catch_stderr:
-                errfile = open(errfilepath, 'r')
-                out = outfile.read().splitlines()
-                err = errfile.read().splitlines()
-                try:
-                    return (out, err)
-                finally:
-                    del(out, err)
-            out = outfile.read().splitlines()
-            try:
-                return out
-            finally:
-                del(out)
+                return out.splitlines(), err.splitlines()
+            return out.splitlines()
         finally:
-            outfile.close()
-            os.unlink(outfilepath)
+            try:
+                process.terminate()
+            except OSError, err:
+                # process already terminated
+                pass
+            del(process, out)
             if catch_stderr:
-                errfile.close()
-                os.unlink(errfilepath)
-                # Force GC
-                del(fde)
-            # Force GC
-            del(fdo, process)
+                del(err)
 
     def run_salt(self, arg_str):
         '''
