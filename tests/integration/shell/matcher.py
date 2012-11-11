@@ -150,19 +150,37 @@ class MatchTest(integration.ShellCase, integration.ShellCaseCommonTestsMixIn):
         data = self.run_salt('-d user.add')
         self.assertIn('user.add:', data)
 
-    def test_salt_documentation_arguments_not_assumed(self):
+    def test_salt_documentation_args_not_assumed_1(self):
         '''
         Test to see if we're not auto-adding '*' and 'sys.doc' to the call
+        Case 1
         '''
         data = self.run_salt('\'*\' -d')
         self.assertIn('user.add:', data)
+
+    def test_salt_documentation_args_not_assumed_2(self):
+        '''
+        Test to see if we're not auto-adding '*' and 'sys.doc' to the call
+        Case 2
+        '''
         data = self.run_salt('\'*\' -d user.add')
         self.assertIn('user.add:', data)
+
+    def test_salt_documentation_args_not_assumed_3(self):
+        '''
+        Test to see if we're not auto-adding '*' and 'sys.doc' to the call
+        Case 3
+        '''
         data = self.run_salt('\'*\' sys.doc -d user.add')
         self.assertIn('user.add:', data)
+
+    def test_salt_documentation_args_not_assumed_4(self):
+        '''
+        Test to see if we're not auto-adding '*' and 'sys.doc' to the call
+        Case 4
+        '''
         data = self.run_salt('\'*\' sys.doc user.add')
         self.assertIn('user.add:', data)
-
 
 
 if __name__ == "__main__":
