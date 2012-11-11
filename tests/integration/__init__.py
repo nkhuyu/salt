@@ -574,29 +574,21 @@ class ShellCase(TestCase):
         process = subprocess.Popen(cmd, **sp_opts)
         process.communicate()
 
-        #import mmap
         try:
             outfile = open(outfilepath, 'r')
-            #mmout = mmap.mmap(fdo, 0)
             if catch_stderr:
                 errfile = open(errfilepath, 'r')
-            #    mmerr = mmap.mmap(fde, 0)
                 return outfile.read().splitlines(), errfile.read().splitlines()
-                #return (
-                #    [line.rstrip() for line in iter(mmout.readline, "")],
-                #    [line.rstrip() for line in iter(mmerr.readline, "")]
-                #)
-            #return [line.rstrip() for line in iter(mmout.readline)]
             return outfile.read().splitlines()
         finally:
             outfile.close()
             os.unlink(outfilepath)
-            #mmout.close()
             if catch_stderr:
                 errfile.close()
                 os.unlink(errfilepath)
+                # Force GC
                 del(fde)
-                #mmerr.close()
+            # Force GC
             del(fdo, process)
 
     def run_salt(self, arg_str):
