@@ -55,9 +55,9 @@ def destructiveTest(func):
     return wrap
 
 
-from pympler import tracker
-MTRACKER = tracker.SummaryTracker()
-MTRACKER.print_diff(); print
+#from pympler import tracker
+#MTRACKER = tracker.SummaryTracker()
+#MTRACKER.print_diff(); print
 
 
 class PymplerResultClass(TextTestResult):

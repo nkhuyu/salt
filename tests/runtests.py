@@ -58,8 +58,8 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     if opts.xmlout:
         runner = xmlrunner.XMLTestRunner(output='test-reports').run(tests)
     else:
-        #runner = saltunittest.TextTestRunner(
-        runner = saltunittest.PymplerTextTestRunner(
+        runner = saltunittest.TextTestRunner(
+        #runner = saltunittest.PymplerTextTestRunner(
             verbosity=opts.verbosity
         ).run(tests)
         TEST_RESULTS.append((header, runner))
@@ -104,11 +104,11 @@ def run_integration_tests(opts):
                 opts.shell, opts.state, opts.name]):
         return status
 
-    saltunittest.MTRACKER.print_diff(); print
+    #saltunittest.MTRACKER.print_diff(); print
 
     with TestDaemon(opts=opts):
-        time.sleep(1)
-        saltunittest.MTRACKER.print_diff(); print
+        #time.sleep(1)
+        #saltunittest.MTRACKER.print_diff(); print
         print 'GO!!!!!!!!!!!'
 
         if opts.name:

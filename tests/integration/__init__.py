@@ -562,7 +562,8 @@ class ShellCase(TestCase):
         fdo, outfilepath = tempfile.mkstemp(dir=TMP)
         sp_opts = {
             'shell': True,
-            'stdout': fdo
+            'stdout': fdo,
+            'bufsize': 1     # line buffered
         }
 
         if not platform.system().lower().startswith('win'):
@@ -573,16 +574,24 @@ class ShellCase(TestCase):
             sp_opts['stderr'] = fde
 
         process = subprocess.Popen(cmd, **sp_opts)
-        process.communicate()
+        process.wait()
+        #process.communicate()
 
         try:
             outfile = open(outfilepath, 'r')
             if catch_stderr:
                 errfile = open(errfilepath, 'r')
-                return (
-                    outfile.read().splitlines(), errfile.read().splitlines()
-                )
-            return outfile.read().splitlines()
+                out = outfile.read().splitlines()
+                err = errfile.read().splitlines()
+                try:
+                    return (out, err)
+                finally:
+                    del(out, err)
+            out = outfile.read().splitlines()
+            try:
+                return out
+            finally:
+                del(out)
         finally:
             outfile.close()
             os.unlink(outfilepath)
