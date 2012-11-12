@@ -26,6 +26,7 @@ import salt.minion
 import salt.runner
 from salt.utils.verify import verify_env
 from saltunittest import TestCase
+import get_system_info
 
 try:
     import console
@@ -222,6 +223,10 @@ class TestDaemon(object):
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
 
+        self.ps_stats = multiprocessing.Process(
+            target=get_system_info.run, args=(os.getpid(),)
+        )
+
         #if os.environ.get('DUMP_SALT_CONFIG', None) is not None:
         #    try:
         #        import yaml
@@ -283,7 +288,7 @@ class TestDaemon(object):
             pprint.pprint(grains['minion'])
 
         print_header('', sep='=', inline=True)
-
+        self.ps_stats.start()
         return self
 
     def __exit__(self, type, value, traceback):
@@ -295,6 +300,7 @@ class TestDaemon(object):
         self.master_process.terminate()
         self.syndic_process.terminate()
         self.smaster_process.terminate()
+        self.ps_stats.terminate()
         self._exit_mockbin()
         self._clean()
 

@@ -104,11 +104,11 @@ def run_integration_tests(opts):
                 opts.shell, opts.state, opts.name]):
         return status
 
-    #saltunittest.MTRACKER.print_diff(); print
+    saltunittest.MTRACKER.print_diff(); print
 
     with TestDaemon(opts=opts):
-        #time.sleep(1)
-        #saltunittest.MTRACKER.print_diff(); print
+        time.sleep(1)
+        saltunittest.MTRACKER.print_diff(); print
         print 'GO!!!!!!!!!!!'
 
         if opts.name:
@@ -290,7 +290,8 @@ def parse_opts():
     logging.root.addHandler(filehandler)
     logging.root.setLevel(logging.DEBUG)
 
-    print_header('Logging tests on {0}'.format(logfile), bottom=False)
+    print_header('Runtest pid: {0}'.format(os.getpid()), bottom=False)
+    print('Logging tests on {0}'.format(logfile))
 
     # With greater verbosity we can also log to the console
     if options.verbosity > 2:
