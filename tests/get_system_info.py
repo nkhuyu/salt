@@ -89,7 +89,7 @@ def get_process_memmap(pid):
     try:
         return '\n{0}'.format(
             pprint.pformat(
-                prrrocess.get_memory_maps(), indent=2
+                process.get_memory_maps(), indent=2
             )
         )
     except KeyError:
@@ -133,7 +133,8 @@ def print_info(pid):
 
     try:
         mmap = get_process_memmap(pid)
-    except:
+    except Exception, err:
+        #print 123, err
         mmap = -1
 
     print
