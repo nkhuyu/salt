@@ -7,6 +7,7 @@
 
 import sys
 import time
+import pprint
 import psutil
 
 
@@ -86,7 +87,11 @@ def get_process_memmap(pid):
     except psutil.error.NoSuchProcess:
         return -2
     try:
-        return '\n{0!r}'.format(process.get_memory_maps())
+        return '\n{0}'.format(
+            pprint.pformat(
+                prrrocess.get_memory_maps(), indent=2
+            )
+        )
     except KeyError:
         return -2
 
@@ -130,7 +135,6 @@ def print_info(pid):
         mmap = get_process_memmap(pid)
     except:
         mmap = -1
-
 
     print
     print '-' * 70
