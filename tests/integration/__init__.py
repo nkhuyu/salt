@@ -588,20 +588,14 @@ class ShellCase(TestCase):
             out = process.communicate()[0]
 
         # Force closing stderr/stdout to release file descriptors
-        process.stdout.close()
-        if catch_stderr:
-            process.stderr.close()
-
         try:
             os.close(fdo)
         except:
-            # Should be closed by the above call
             pass
         if catch_stderr:
             try:
                 os.close(fde)
             except:
-                # Should be closed by the above call
                 pass
 
         try:
