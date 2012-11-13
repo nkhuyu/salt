@@ -146,7 +146,7 @@ def print_info(pid):
     print 'Current connections count: {0}'.format(connections)
     print '      Process Memory Info: {0}'.format(mi)
     print '  Process Ext Memory Info: {0}'.format(mei)
-    print '       Process Memory Map: {0}'.format(mmap)
+    #print '       Process Memory Map: {0}'.format(mmap)
     print '-' * 70
     print
 
