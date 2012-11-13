@@ -581,7 +581,10 @@ class ShellCase(TestCase):
             sp_opts['stderr'] = fde
 
         process = subprocess.Popen(cmd, **sp_opts)
-        process.communicate()
+        if sys.version_info < (2, 7):
+            process.wait()
+        else:
+            process.communicate()
 
         out = open(outfilepath).read()
         if catch_stderr:
