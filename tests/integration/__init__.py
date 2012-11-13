@@ -24,6 +24,7 @@ import salt.config
 import salt.master
 import salt.minion
 import salt.runner
+import salt.utils
 from salt.utils.verify import verify_env
 from saltunittest import TestCase
 import get_system_info
@@ -196,7 +197,6 @@ class TestDaemon(object):
                     TMP
                     ],
                    pwd.getpwuid(os.getuid()).pw_name)
-
 
         # Set up PATH to mockbin
         self._enter_mockbin()
@@ -566,17 +566,19 @@ class ShellCase(TestCase):
         ppath = 'PYTHONPATH={0}:{1}'.format(CODE_DIR, ':'.join(sys.path[1:]))
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
+        fdo, outfilepath = salt.utils.mkstemp(dir=TMP, close_fd=False)
         sp_opts = {
             'shell': True,
-            'stdout': subprocess.PIPE,
-            'bufsize': 1     # line buffered
+            'stdout': fdo,
+            #'bufsize': 1     # line buffered
         }
 
         if not platform.system().lower().startswith('win'):
             sp_opts['close_fds'] = True
 
         if catch_stderr:
-            sp_opts['stderr'] = subprocess.PIPE
+            fde, errfilepath = salt.utils.mkstemp(dir=TMP, close_fd=False)
+            sp_opts['stderr'] = fde
 
         process = subprocess.Popen(cmd, **sp_opts)
 
@@ -591,6 +593,18 @@ class ShellCase(TestCase):
             process.stderr.close()
 
         try:
+            os.close(fdo)
+        except:
+            # Should be closed by the above call
+            pass
+        if catch_stderr:
+            try:
+                os.close(fde)
+            except:
+                # Should be closed by the above call
+                pass
+
+        try:
             if catch_stderr:
                 return out.splitlines(), err.splitlines()
             return out.splitlines()
@@ -600,9 +614,9 @@ class ShellCase(TestCase):
             except OSError, err:
                 # process already terminated
                 pass
-            del(process, out)
+            del(process, fdo, outfilepath, out)
             if catch_stderr:
-                del(err)
+                del(fde, errfilepath, err)
             print(
                 '\nActive processes: {0}\n'.format(
                     len(subprocess._active)
