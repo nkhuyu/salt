@@ -3,7 +3,6 @@ Manage basic template commands
 '''
 import time
 import os
-import tempfile
 
 import salt.utils
 from salt._compat import string_types
@@ -44,8 +43,7 @@ def compile_template_str(template, renderers, default):
     Take the path to a template and return the high data structure
     derived from the template.
     '''
-    fd_, fn_ = tempfile.mkstemp()
-    os.close(fd_)
+    fn_ = salt.utils.mkstemp()
     with open(fn_, 'w+') as f:
         f.write(template)
     return compile_template(fn_, renderers, default)
