@@ -2,19 +2,22 @@
 Manage the shadow file
 '''
 
+# Import python libs
 import os
 try:
     import spwd
 except ImportError:
     pass
 
+# Import salt libs
+import salt.utils
 
 def __virtual__():
     '''
     Only work on posix-like systems
     '''
 
-    return 'shadow' if __grains__['kernel'] == 'SunOS' else False 
+    return 'shadow' if __grains__['kernel'] == 'SunOS' else False
 
 
 def info(name):
@@ -51,7 +54,8 @@ def info(name):
 
 def set_maxdays(name, maxdays):
     '''
-    Set the maximum number of days during which a password is valid. See man passwd.
+    Set the maximum number of days during which a password is valid. See man
+    passwd.
 
     CLI Example::
 
@@ -101,7 +105,7 @@ def set_password(name, password):
     if not os.path.isfile(s_file):
         return ret
     lines = []
-    for line in open(s_file, 'rb').readlines():
+    for line in salt.utils.fopen(s_file, 'rb').readlines():
         comps = line.strip().split(':')
         if not comps[0] == name:
             lines.append(line)
@@ -109,14 +113,15 @@ def set_password(name, password):
         comps[1] = password
         line = ':'.join(comps)
         lines.append('{0}\n'.format(line))
-    open(s_file, 'w+').writelines(lines)
+    salt.utils.fopen(s_file, 'w+').writelines(lines)
     uinfo = info(name)
     return uinfo['pwd'] == password
 
 
 def set_warndays(name, warndays):
     '''
-    Set the number of days of warning before a password change is required. See man passwd.
+    Set the number of days of warning before a password change is required.
+    See man passwd.
 
     CLI Example::
 

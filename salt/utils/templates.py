@@ -42,14 +42,14 @@ def mako(sfn, string=False, **kwargs):
                 continue
             passthrough[kwarg] = kwargs[kwarg]
         data = ''
-        with open(sfn, 'r') as src:
+        with salt.utils.fopen(sfn, 'r') as src:
             template = Template(src.read())
             data = template.render(**passthrough)
         if string:
             salt.utils.safe_rm(tgt)
             return {'result': True,
                     'data': data}
-        with open(tgt, 'w+') as target:
+        with salt.utils.fopen(tgt, 'w+') as target:
             target.write(data)
         return {'result': True,
                 'data': tgt}
@@ -77,7 +77,7 @@ def jinja(sfn, string=False, **kwargs):
     try:
         passthrough = {}
         newline = False
-        with open(sfn, 'rb') as source:
+        with salt.utils.fopen(sfn, 'rb') as source:
             if source.read().endswith('\n'):
                 newline = True
         tgt = salt.utils.mkstemp()
@@ -98,7 +98,7 @@ def jinja(sfn, string=False, **kwargs):
                 salt.utils.safe_rm(tgt)
                 return {'result': True,
                         'data': data}
-            with open(tgt, 'w+') as target:
+            with salt.utils.fopen(tgt, 'w+') as target:
                 target.write(data)
                 if newline:
                     target.write('\n')
@@ -143,7 +143,7 @@ def py(sfn, string=False, **kwargs):
             return {'result': True,
                     'data': data}
         tgt = salt.utils.mkstemp()
-        with open(tgt, 'w+') as target:
+        with salt.utils.fopen(tgt, 'w+') as target:
             target.write(data)
         return {'result': True,
                 'data': tgt}
@@ -176,14 +176,14 @@ def wempy(sfn, string=False, **kwargs):
                 continue
             passthrough[kwarg] = kwargs[kwarg]
         data = ''
-        with open(sfn, 'r') as src:
+        with salt.utils.fopen(sfn, 'r') as src:
             template = Template(src.read())
             data = template.render(**passthrough)
         if string:
             salt.utils.safe_rm(tgt)
             return {'result': True,
                     'data': data}
-        with open(tgt, 'w+') as target:
+        with salt.utils.fopen(tgt, 'w+') as target:
             target.write(data)
         return {'result': True,
                 'data': tgt}

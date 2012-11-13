@@ -23,7 +23,7 @@ def compile_template(template, renderers, default, env='', sls=''):
     if salt.utils.is_empty(template):
         return {}
     # Template is nothing but whitespace
-    with open(template) as f:
+    with salt.utils.fopen(template) as f:
         if not f.read().strip():
             return {}
     ret = renderers[
@@ -44,7 +44,7 @@ def compile_template_str(template, renderers, default):
     derived from the template.
     '''
     fn_ = salt.utils.mkstemp()
-    with open(fn_, 'w+') as f:
+    with salt.utils.fopen(fn_, 'w+') as f:
         f.write(template)
     return compile_template(fn_, renderers, default)
 
@@ -55,7 +55,7 @@ def template_shebang(template, renderers, default):
     '''
     # Open up the first line of the sls template
     line = ''
-    with open(template, 'r') as f:
+    with salt.utils.fopen(template, 'r') as f:
         line = f.readline()
     # Check if it starts with a shebang
     if line.startswith('#!'):
