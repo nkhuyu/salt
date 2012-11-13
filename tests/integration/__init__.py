@@ -581,11 +581,11 @@ class ShellCase(TestCase):
             sp_opts['stderr'] = fde
 
         process = subprocess.Popen(cmd, **sp_opts)
+        process.communicate()
 
+        out = open(outfilepath).read()
         if catch_stderr:
-            out, err = process.communicate()
-        else:
-            out = process.communicate()[0]
+            err = open(errfilepath).read()
 
         # Force closing stderr/stdout to release file descriptors
         try:
