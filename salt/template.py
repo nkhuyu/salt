@@ -1,6 +1,7 @@
 '''
 Manage basic template commands
 '''
+
 # Import python libs
 import time
 import os
@@ -113,12 +114,11 @@ def template_shebang(template, renderers, default):
     return render_pipe
 
 
-
-
 # A dict of combined renderer(ie, rend1_rend2_...) to
 # render-pipe(ie, rend1|rend2|...)
 #
 OLD_STYLE_RENDERERS = {}
+
 for comb in """
     yaml_jinja
     yaml_mako
@@ -135,8 +135,8 @@ for comb in """
 def check_render_pipe_str(pipestr, renderers):
     '''
     Check that all renderers specified in the pipe string are available.
-    If so, return the list of render functions in the pipe as (render_func, arg_str)
-    tuples; otherwise return [].
+    If so, return the list of render functions in the pipe as
+    (render_func, arg_str) tuples; otherwise return [].
     '''
     parts = [r.strip() for r in pipestr.split('|')]
     # Note: currently, | is not allowed anywhere in the shebang line except
@@ -147,9 +147,8 @@ def check_render_pipe_str(pipestr, renderers):
         if parts[0] == pipestr and pipestr in OLD_STYLE_RENDERERS:
             parts = OLD_STYLE_RENDERERS[pipestr].split('|')
         for p in parts:
-            name, argline = (p+' ').split(' ', 1)
+            name, argline = (p + ' ').split(' ', 1)
             results.append((renderers[name], argline.strip()))
         return results
     except KeyError:
         return []
-

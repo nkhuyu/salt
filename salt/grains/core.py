@@ -483,7 +483,7 @@ def os_data():
         except ImportError:
             # if the python library isn't available, default to regex
             if os.path.isfile('/etc/lsb-release'):
-                with open('/etc/lsb-release') as f:
+                with salt.utils.fopen('/etc/lsb-release') as f:
                     for line in f:
                         # Matches any possible format:
                         #     DISTRIB_ID="Ubuntu"
