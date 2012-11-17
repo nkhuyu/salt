@@ -39,14 +39,15 @@ class KeyTest(integration.ShellCase,
         '''
         data = self.run_key('-L --json-out')
         if version.__version_info__ < (0, 10, 8):
-            expect = [
+            self.assertEqual(
                 "WARNING: The option --json-out is deprecated. Please "
-                "consider using '--out json' instead."
-            ]
-        else:
-            expect = []
+                "consider using '--out json' instead.",
+                data[0]
+            )
 
-        expect += [
+        data = self.run_key('-L --out json')
+
+        expect = [
             '{',
             '    "minions_rejected": [], ',
             '    "minions_pre": [], ',
@@ -64,14 +65,15 @@ class KeyTest(integration.ShellCase,
         '''
         data = self.run_key('-L --yaml-out')
         if version.__version_info__ < (0, 10, 8):
-            expect = [
+            self.assertEqual(
                 "WARNING: The option --yaml-out is deprecated. Please "
-                "consider using '--out yaml' instead."
-            ]
-        else:
-            expect = []
+                "consider using '--out yaml' instead.",
+                data[0]
+            )
 
-        expect += ['minions:'] + [
+        data = self.run_key('-L --out yaml')
+
+        expect = ['minions:'] + [
             '- {0}'.format(m) for m in self.get_running_minions()] + [
             'minions_pre: []',
             'minions_rejected: []',
@@ -84,24 +86,26 @@ class KeyTest(integration.ShellCase,
         '''
         data = self.run_key('-L --raw-out')
         if version.__version_info__ < (0, 10, 8):
-            expect = [
+            self.assertEqual(
                 "WARNING: The option --raw-out is deprecated. Please "
-                "consider using '--out raw' instead."
-            ]
-        else:
-            expect = []
+                "consider using '--out raw' instead.",
+                data[0]
+            )
+
+        data = self.run_key('-L --out raw')
 
         running = self.get_running_minions()
         last = running.pop(-1)
-        expect += [
-            "{'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
+        expect = [
+            "{'minions_rejected': [], 'minions_pre': [], ",
+            "'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
                 '             {0!r},'.format(m) for m in running
                 ] + [
             "             {0!r}],".format(last),
             " 'minions_pre': [],",
             " 'minions_rejected': []}",
         ]
-        self.assertEqual(data, expect)
+        self.assertEqual(data, ''.join(expect))
 
     def test_list_acc(self):
         '''
