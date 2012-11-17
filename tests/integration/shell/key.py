@@ -95,17 +95,21 @@ class KeyTest(integration.ShellCase,
         data = self.run_key('-L --out raw')
 
         running = self.get_running_minions()
-        last = running.pop(-1)
-        expect = [
-            "{'minions_rejected': [], 'minions_pre': [], ",
-            "'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
-                '             {0!r},'.format(m) for m in running
+        if len(running) == 2:
+            expect = [
+                "{'minions_rejected': [], 'minions_pre': [], "
+                "'minions': ['minion', 'sub_minion']}"
+            ]
+        else:
+            last = running.pop(-1)
+            expect = [
+                "{'minions_rejected': [], 'minions_pre': [], "
+                "'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
+                    '             {0!r},'.format(m) for m in running
                 ] + [
-            "             {0!r}],".format(last),
-            " 'minions_pre': [],",
-            " 'minions_rejected': []}",
-        ]
-        self.assertEqual(data, ''.join(expect))
+                "             {0!r}],".format(last),
+            ]
+        self.assertEqual(data, expect)
 
     def test_list_acc(self):
         '''

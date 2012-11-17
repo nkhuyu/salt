@@ -18,7 +18,7 @@ def __virtual__():
 
 
 def py_version_info():
-    runtests['py_version_info'] = sys.version_info
+    runtests['py_version_info'] = tuple(sys.version_info[:3])
 
 
 def virtualenv_has_system_site_packages():
