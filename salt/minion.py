@@ -23,7 +23,7 @@ import zmq
 # Import salt libs
 from salt.exceptions import AuthenticationError, \
     CommandExecutionError, CommandNotFoundError, SaltInvocationError, \
-    SaltClientError, SaltReqTimeoutError
+    SaltReqTimeoutError
 import salt.client
 import salt.crypt
 import salt.loader
@@ -160,18 +160,18 @@ class Minion(object):
         # module
         opts['grains'] = salt.loader.grains(opts)
         self.opts = opts
+        self.opts['pillar'] = salt.pillar.get_pillar(
+            opts,
+            opts['grains'],
+            opts['id'],
+            opts['environment'],
+            ).compile_pillar()
         self.serial = salt.payload.Serial(self.opts)
         self.mod_opts = self.__prep_mod_opts()
         self.functions, self.returners = self.__load_modules()
         self.matcher = Matcher(self.opts, self.functions)
         self.proc_dir = get_proc_dir(opts['cachedir'])
         self.authenticate()
-        opts['pillar'] = salt.pillar.get_pillar(
-            opts,
-            opts['grains'],
-            opts['id'],
-            opts['environment'],
-            ).compile_pillar()
 
     def __prep_mod_opts(self):
         '''
@@ -306,7 +306,8 @@ class Minion(object):
             fn_ = os.path.join(minion_instance.proc_dir, data['jid'])
             sdata = {'pid': os.getpid()}
             sdata.update(data)
-            open(fn_, 'w+').write(minion_instance.serial.dumps(sdata))
+            with salt.utils.fopen(fn_, 'w+') as fp_:
+                fp_.write(minion_instance.serial.dumps(sdata))
         ret = {}
         for ind in range(0, len(data['arg'])):
             try:
@@ -477,7 +478,7 @@ class Minion(object):
             jdir = os.path.dirname(fn_)
             if not os.path.isdir(jdir):
                 os.makedirs(jdir)
-            open(fn_, 'w+').write(self.serial.dumps(ret))
+            salt.utils.fopen(fn_, 'w+').write(self.serial.dumps(ret))
         return ret_val
 
     def _state_run(self):
@@ -531,7 +532,7 @@ class Minion(object):
         '''
         fn_ = os.path.join(self.opts['cachedir'], 'module_refresh')
         if os.path.isfile(fn_):
-            with open(fn_, 'r+') as f:
+            with salt.utils.fopen(fn_, 'r+') as f:
                 data = f.read()
                 if 'pillar' in data:
                     self.opts['pillar'] = salt.pillar.get_pillar(
@@ -639,7 +640,6 @@ class Minion(object):
                 if socket in socks and socks[socket] == zmq.POLLIN:
                     payload = self.serial.loads(socket.recv())
                     self._handle_payload(payload)
-                    last = time.time()
                 time.sleep(0.05)
                 multiprocessing.active_children()
                 self.passive_refresh()

@@ -96,7 +96,7 @@ class Client(object):
         yield dest
         os.umask(cumask)
 
-    def get_file(self, path, dest='', makedirs=False, env='base'):
+    def get_file(self, path, dest='', makedirs=False, env='base', gzip=None):
         '''
         Copies a file from the local files or master depending on
         implementation
@@ -257,7 +257,7 @@ class Client(object):
                 return dest
         return False
 
-    def get_dir(self, path, dest='', env='base'):
+    def get_dir(self, path, dest='', env='base', gzip=None):
         '''
         Get a directory recursively from the salt-master
         '''
@@ -284,7 +284,7 @@ class Client(object):
                     self.get_file(
                         'salt://{0}'.format(fn_),
                         '{0}/{1}'.format(dest, minion_relpath),
-                        True, env
+                        True, env, gzip
                     )
                 )
         # Replicate empty dirs from master
@@ -326,7 +326,7 @@ class Client(object):
                 os.makedirs(destdir)
         try:
             with contextlib.closing(url_open(url)) as srcfp:
-                with open(dest, 'wb') as destfp:
+                with salt.utils.fopen(dest, 'wb') as destfp:
                     shutil.copyfileobj(srcfp, destfp)
             return dest
         except HTTPError as ex:
@@ -413,10 +413,10 @@ class LocalClient(Client):
                 return fnd
         return fnd
 
-    def get_file(self, path, dest='', makedirs=False, env='base', gzip_compression=None):
+    def get_file(self, path, dest='', makedirs=False, env='base', gzip=None):
         '''
         Copies a file from the local files directory into :param:`dest`
-        gzip_compression settings are ignored for local files
+        gzip compression settings are ignored for local files
         '''
         path = self._check_proto(path)
         fnd = self._find_file(path, env)
@@ -485,7 +485,7 @@ class LocalClient(Client):
                 log.warning(err.format(path))
                 return ret
             else:
-                with open(path, 'rb') as f:
+                with salt.utils.fopen(path, 'rb') as f:
                     ret['hsum'] = hashlib.md5(f.read()).hexdigest()
                 ret['hash_type'] = 'md5'
                 return ret
@@ -493,7 +493,7 @@ class LocalClient(Client):
         if not path:
             return {}
         ret = {}
-        with open(path, 'rb') as f:
+        with salt.utils.fopen(path, 'rb') as f:
             ret['hsum'] = getattr(hashlib, self.opts['hash_type'])(
                 f.read()).hexdigest()
         ret['hash_type'] = self.opts['hash_type']
@@ -555,7 +555,7 @@ class RemoteClient(Client):
         self.auth = salt.crypt.SAuth(opts)
         self.sreq = salt.payload.SREQ(self.opts['master_uri'])
 
-    def get_file(self, path, dest='', makedirs=False, env='base', gzip_compression=None):
+    def get_file(self, path, dest='', makedirs=False, env='base', gzip=None):
         '''
         Get a single file from the salt-master
         path must be a salt server location, aka, salt://path/to/file, if
@@ -567,9 +567,9 @@ class RemoteClient(Client):
         load = {'path': path,
                 'env': env,
                 'cmd': '_serve_file'}
-        if gzip_compression:
-            gzip_compression = int(gzip_compression)
-            load['gzip_compression'] = gzip_compression
+        if gzip:
+            gzip = int(gzip)
+            load['gzip'] = gzip
 
         fn_ = None
         if dest:
@@ -579,7 +579,7 @@ class RemoteClient(Client):
                     os.makedirs(destdir)
                 else:
                     return False
-            fn_ = open(dest, 'wb+')
+            fn_ = salt.utils.fopen(dest, 'wb+')
         while True:
             if not fn_:
                 load['loc'] = 0
@@ -602,15 +602,14 @@ class RemoteClient(Client):
                     with self._cache_loc(data['dest'], env) as cache_dest:
                         dest = cache_dest
                         if not os.path.exists(cache_dest):
-                            with open(cache_dest, 'wb+') as f:
+                            with salt.utils.fopen(cache_dest, 'wb+') as f:
                                 f.write(data['data'])
                 break
             if not fn_:
                 with self._cache_loc(data['dest'], env) as cache_dest:
                     dest = cache_dest
-                    fn_ = open(dest, 'wb+')
-            gzip_compression = data.get('gzip_compression', None)
-            if gzip_compression:
+                    fn_ = salt.utils.fopen(dest, 'wb+')
+            if data.get('gzip', None):
                 data = salt.utils.gzip_util.uncompress(data['data'])
             else:
                 data = data['data']
@@ -685,7 +684,7 @@ class RemoteClient(Client):
                 return {}
             else:
                 ret = {}
-                with open(path, 'rb') as f:
+                with salt.utils.fopen(path, 'rb') as f:
                     ret['hsum'] = hashlib.md5(f.read()).hexdigest()
                 ret['hash_type'] = 'md5'
                 return ret

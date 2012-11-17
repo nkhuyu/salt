@@ -1,7 +1,7 @@
 Source: salt
 Section: admin
 Priority: optional
-Maintainer: Corey Quinn <corey@sequestered.net>
+Maintainer: Sean Channel <pentabular@gmail.com>
 Build-Depends: debhelper,
                cython,
                python | python-all | python-dev | python-all-dev,
@@ -15,8 +15,6 @@ Build-Depends: debhelper,
                msgpack-python
 Standards-Version: 3.9.3
 Homepage: http://saltstack.org
-#Vcs-Git: git://git.debian.org/collab-maint/salt.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/salt.git;a=summary
 #X-Python-Version: >= 2.6, <= 2.7
 
 
@@ -32,6 +30,7 @@ Depends: ${python:Depends},
          python-yaml,
          python-zmq,
          msgpack-python
+Recommends: dmidecode, pciutils
 Description: Shared libraries that salt requires for all packages
  This package is a powerful remote execution manager that can be used
  to administer servers in a fast and efficient way.
@@ -120,4 +119,28 @@ Description: This package represents the master-of-masters for salt
  the backbone of cloud and data center management.
  .
  This particular package provides the master of masters for salt-- it enables
- the management of multiple masters at a time.
+ the management of multiple masters at a time..
+
+Package: salt-doc
+Architecture: all
+Section: doc
+Depends: ${misc:Depends}
+Description: additional documentation for salt, the distributed remote execution system
+ salt is a powerful remote execution manager that can be used to
+ administer servers in a fast and efficient way.
+ .
+ It allows commands to be executed across large groups of
+ servers. This means systems can be easily managed, but data can
+ also be easily gathered.  Quick introspection into running
+ systems becomes a reality.
+ .
+ Remote execution is usually used to set up a certain state on a
+ remote system. Salt addresses this problem as well, the salt
+ state system uses salt state files to define the state a server
+ needs to be in.
+ .
+ Between the remote execution system, and state management Salt
+ addresses the backbone of cloud and data center management.
+ .
+ This particular package provides the HTML documentation for
+ salt.

@@ -76,12 +76,9 @@ something like this:
         - source: salt://code/flask
 '''
 # Import Python libs
-from contextlib import nested  # For < 2.7 compat
 import os
-import errno
 import shutil
 import difflib
-import hashlib
 import logging
 import copy
 import re
@@ -95,6 +92,9 @@ from salt._compat import string_types
 logger = logging.getLogger(__name__)
 
 COMMENT_REGEX = r'^([[:space:]]*){0}[[:space:]]?'
+
+accumulators = {}
+
 
 def _check_user(user, group):
     '''
@@ -314,7 +314,6 @@ def _symlink_check(name, target, force):
     '''
     Check the symlink function
     '''
-    ret = None
     if not os.path.exists(name):
         comment = 'Symlink {0} to {1} is set for creation'.format(name, target)
         return None, comment
@@ -544,6 +543,13 @@ def managed(name,
         hash algorithm followed by the hash of the file:
         md5=e138491e9d5b97023cea823fe17bac22
 
+        The file can contain checksums for several files, in this case every
+        line must consist of full name of the file and checksum separated by
+        space:
+
+        /etc/rc.conf md5=ef6e82e4006dee563d98ada2a2a80a27
+        /etc/resolv.conf sha256=c8525aee419eb649f0233be91c151178b30f0dff8ebbdcc8de71b1d5c8bcc06a
+
     user
         The user to own the file, this defaults to the user salt is running as
         on the minion
@@ -618,6 +624,11 @@ def managed(name,
             return ret
         if not source:
             return touch(name, makedirs=makedirs)
+
+    if name in accumulators:
+        if not context:
+            context = {}
+        context['accumulator'] = accumulators[name]
 
     if __opts__['test']:
         ret['result'], ret['comment'] = __salt__['file.check_managed'](
@@ -1161,11 +1172,11 @@ def sed(name, before, after, limit='', backup='.bak', options='-r -e',
         ret['comment'] = 'File {0} is set to be updated'.format(name)
         ret['result'] = None
         return ret
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         slines = fp_.readlines()
     # should be ok now; perform the edit
     __salt__['file.sed'](name, before, after, limit, backup, options, flags)
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         nlines = fp_.readlines()
 
     # check the result
@@ -1236,12 +1247,12 @@ def comment(name, regex, char='#', backup='.bak'):
         ret['comment'] = 'File {0} is set to be updated'.format(name)
         ret['result'] = None
         return ret
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         slines = fp_.readlines()
     # Perform the edit
     __salt__['file.comment'](name, regex, char, backup)
 
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         nlines = fp_.readlines()
 
     # Check the result
@@ -1310,13 +1321,13 @@ def uncomment(name, regex, char='#', backup='.bak'):
         ret['result'] = None
         return ret
 
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         slines = fp_.readlines()
 
     # Perform the edit
     __salt__['file.uncomment'](name, regex, char, backup)
 
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         nlines = fp_.readlines()
 
     # Check the result
@@ -1397,12 +1408,12 @@ def append(name, text=None, makedirs=False, source=None, source_hash=None):
                 "state file.append is loading text contents from cached source "
                 "{0}({1})".format(source, cached_source_path)
             )
-            text = open(cached_source_path, 'r').read()
+            text = salt.utils.fopen(cached_source_path, 'r').read()
 
     if isinstance(text, string_types):
         text = (text,)
 
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         slines = fp_.readlines()
 
     count = 0
@@ -1431,7 +1442,7 @@ def append(name, text=None, makedirs=False, source=None, source_hash=None):
             __salt__['file.append'](name, line)
             count += 1
 
-    with open(name, 'rb') as fp_:
+    with salt.utils.fopen(name, 'rb') as fp_:
         nlines = fp_.readlines()
 
     if slines != nlines:
@@ -1636,4 +1647,50 @@ def rename(name, source, force=False, makedirs=False):
 
     ret['comment'] = 'Moved "{0}" to "{1}"'.format(source, name)
     ret['changes'] = {name: source}
+    return ret
+
+
+def accumulated(name, filename, text, **kwargs):
+    '''
+    Prepare accumulator which can be used in template in file.managed state.
+    accumulator dictionary becomes available in template.
+
+    name
+        Accumulator name
+
+    filename
+        Filename which would receive this accumulator (see file.managed state
+        documentation about ''name``)
+
+    text
+        String or list for adding in accumulator
+
+    require_in / watch_in
+        One of them required for sure we fill up accumulator before we manage
+        the file. Probably the same as filename
+    '''
+    ret = {
+        'name': name,
+        'changes': {},
+        'result': True,
+        'comment': ''
+    }
+    if not filter(lambda x: 'file' in x,
+                  kwargs.get('require_in', ()) + kwargs.get('watch_in', ())):
+        ret['result'] = False
+        ret['comment'] = ('Orphaned accumulator {0} in '
+                          '{1}:{2}'.format(name, kwargs['__sls__'],
+                          kwargs['__id__']))
+        return ret
+    if isinstance(text, string_types):
+        text = (text,)
+    if filename not in accumulators:
+        accumulators[filename] = {}
+    if name not in accumulators[filename]:
+        accumulators[filename][name] = []
+    for chunk in text:
+        if chunk not in accumulators[filename][name]:
+            accumulators[filename][name].append(chunk)
+            ret['comment'] = ('Accumulator {0} for file {1} '
+                              'was charged by text').format(name, filename)
     return ret

@@ -1,18 +1,18 @@
 '''
 Module to provide Postgres compatibility to salt.
 
-In order to connect to Postgres, certain configuration is required
-in /etc/salt/minion on the relevant minions. Some sample configs
-might look like::
+:configuration: In order to connect to Postgres, certain configuration is
+    required in /etc/salt/minion on the relevant minions. Some sample configs
+    might look like::
 
-    postgres.host: 'localhost'
-    postgres.port: '5432'
-    postgres.user: 'postgres'
-    postgres.pass: ''
-    postgres.db: 'postgres'
+        postgres.host: 'localhost'
+        postgres.port: '5432'
+        postgres.user: 'postgres'
+        postgres.pass: ''
+        postgres.db: 'postgres'
 
-This data can also be passed into pillar. Options passed into opts will
-overwrite options passed into pillar
+    This data can also be passed into pillar. Options passed into opts will
+    overwrite options passed into pillar
 '''
 
 # Import Python libs
@@ -87,10 +87,7 @@ def _psql_cmd(*args, **kwargs):
     return cmdstr
 
 
-'''
-Database related actions
-'''
-
+# Database related actions
 
 def db_list(user=None, host=None, port=None, runas=None):
     '''
@@ -107,7 +104,11 @@ def db_list(user=None, host=None, port=None, runas=None):
     cmd = _psql_cmd('-l', user=user, host=host, port=port)
     cmdret = __salt__['cmd.run'](cmd, runas=runas)
     lines = [x for x in cmdret.splitlines() if len(x.split("|")) == 6]
-    header = [x.strip() for x in lines[0].split("|")]
+    try:
+        header = [x.strip() for x in lines[0].split("|")]
+    except IndexError:
+        log.error("Invalid PostgreSQL output: '%s'", cmdret)
+        return []
     for line in lines[1:]:
         line = [x.strip() for x in line.split("|")]
         if not line[0] == "":
@@ -229,9 +230,7 @@ def db_remove(name, user=None, host=None, port=None, runas=None):
         log.info("Failed to delete DB '{0}'.".format(name, ))
         return False
 
-'''
-User related actions
-'''
+# User related actions
 
 def user_list(user=None, host=None, port=None, runas=None):
     '''
@@ -282,7 +281,11 @@ def user_exists(name, user=None, host=None, port=None, runas=None):
     cmd = _psql_cmd('-c', query, host=host, user=user, port=port)
     cmdret = __salt__['cmd.run'](cmd, runas=runas)
     log.debug(cmdret.splitlines())
-    val = cmdret.splitlines()[1]
+    try:
+        val = cmdret.splitlines()[1]
+    except IndexError:
+        log.error("Invalid PostgreSQL result: '%s'", cmdret)
+        return False
     return True if val.strip() == 't' else False
 
 
@@ -312,14 +315,14 @@ def user_create(username,
 
     sub_cmd = 'CREATE USER "{0}" WITH'.format(username, )
     if password:
+        if encrypted:
+            sub_cmd = "{0} ENCRYPTED".format(sub_cmd, )
         escaped_password = password.replace("'", "''")
         sub_cmd = "{0} PASSWORD '{1}'".format(sub_cmd, escaped_password)
     if createdb:
         sub_cmd = "{0} CREATEDB".format(sub_cmd, )
     if createuser:
         sub_cmd = "{0} CREATEUSER".format(sub_cmd, )
-    if encrypted:
-        sub_cmd = "{0} ENCRYPTED".format(sub_cmd, )
     if superuser:
         sub_cmd = "{0} SUPERUSER".format(sub_cmd, )
 

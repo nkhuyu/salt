@@ -1,25 +1,21 @@
 '''
 Module to provide MySQL compatibility to salt.
 
-REQUIREMENT 1:
+:depends:   - MySQLdb Python module
+:configuration: In order to connect to MySQL, certain configuration is required
+    in /etc/salt/minion on the relevant minions. Some sample configs might look
+    like::
 
-In order to connect to MySQL, certain configuration is required
-in /etc/salt/minion on the relevant minions. Some sample configs
-might look like::
+        mysql.host: 'localhost'
+        mysql.port: 3306
+        mysql.user: 'root'
+        mysql.pass: ''
+        mysql.db: 'mysql'
+        mysql.unix_socket: '/tmp/mysql.sock'
 
-    mysql.host: 'localhost'
-    mysql.port: 3306
-    mysql.user: 'root'
-    mysql.pass: ''
-    mysql.db: 'mysql'
+    You can also use a defaults file::
 
-You can also use a defaults file::
-
-    mysql.default_file: '/etc/mysql/debian.cnf'
-
-REQUIREMENT 2:
-
-Required python modules: MySQLdb
+        mysql.default_file: '/etc/mysql/debian.cnf'
 '''
 # Import Python libs
 import time
@@ -40,14 +36,10 @@ __opts__ = {}
 
 def __virtual__():
     '''
-    Only load this module if the mysql config is set
+    Only load this module if the mysql libraries exist
     '''
-    if any(k.startswith('mysql.') for k in list(__opts__)):
-        if has_mysqldb:
-            return 'mysql'
-    elif any(k.startswith('mysql.') for k in list(__pillar__)):
-        if has_mysqldb:
-            return 'mysql'
+    if has_mysqldb:
+        return 'mysql'
     return False
 
 
@@ -101,13 +93,16 @@ def connect(**kwargs):
         if name in kwargs:
             connargs[key] = kwargs[name]
         else:
-            connargs[key] = __salt__['config.option']('mysql.{0}'.format(name))
+            val = __salt__['config.option']('mysql.{0}'.format(name), None)
+            if val is not None:
+                connargs[key] = val
 
     _connarg('host')
     _connarg('user')
     _connarg('pass', 'passwd')
     _connarg('port')
     _connarg('db')
+    _connarg('unix_socket')
     _connarg('default_file', 'read_default_file')
 
     db = MySQLdb.connect(**connargs)
@@ -780,3 +775,42 @@ def grant_revoke(grant,
         'revoked'.format(grant, database, user)
     )
     return False
+
+def processlist():
+    '''
+    Retrieves the processlist from the MySQL server via  
+    "SHOW FULL PROCESSLIST". 
+
+    Returns: a list of dicts, with each dict representing a process:
+        {'Command': 'Query',
+                          'Host': 'localhost',
+                          'Id': 39,
+                          'Info': 'SHOW FULL PROCESSLIST',
+                          'Rows_examined': 0,
+                          'Rows_read': 1,
+                          'Rows_sent': 0,
+                          'State': None,
+                          'Time': 0,
+                          'User': 'root',
+                          'db': 'mysql'}
+
+    CLI Example:
+        salt '*' mysql.processlist
+    
+    '''
+    ret = [] 
+    hdr=("Id", "User", "Host", "db", "Command","Time", "State", 
+         "Info", "Rows_sent", "Rows_examined", "Rows_read")
+    db = connect()
+    cur = db.cursor()
+    cur.execute("SHOW FULL PROCESSLIST")
+    for i in range(cur.rowcount):
+        row = cur.fetchone()        
+        r = {}
+        for j in range(len(hdr)):
+            r[hdr[j]] = row[j]
+
+        ret.append(r)
+            
+    cur.close()
+    return ret

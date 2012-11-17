@@ -7,6 +7,7 @@ import glob
 import os
 import socket
 import logging
+import time
 
 # import third party libs
 import yaml
@@ -59,7 +60,7 @@ def _append_domain(opts):
 
 
 def _read_conf_file(path):
-    with open(path, 'r') as conf_file:
+    with salt.utils.fopen(path, 'r') as conf_file:
         conf_opts = yaml.safe_load(conf_file.read()) or {}
         # allow using numeric ids: convert int to string
         if 'id' in conf_opts:
@@ -79,8 +80,8 @@ def load_config(opts, path, env_var):
     if not os.path.isfile(path):
         template = '{0}.template'.format(path)
         if os.path.isfile(template):
-            with open(path, 'w') as out:
-                with open(template, 'r') as f:
+            with salt.utils.fopen(path, 'w') as out:
+                with salt.utils.fopen(template, 'r') as f:
                     f.readline()  # skip first line
                     out.write(f.read())
 
@@ -146,7 +147,7 @@ def prepend_root_dir(opts, path_options):
                     opts[path_option])
 
 
-def minion_config(path):
+def minion_config(path, check_dns=True):
     '''
     Reads in the minion configuration file and sets up special options
     '''
@@ -212,6 +213,7 @@ def minion_config(path):
             'default_include': 'minion.d/*.conf',
             'update_url': False,
             'update_restart_services': [],
+            'retry_dns': 30,
             }
 
     if len(opts['sock_dir']) > len(opts['cachedir']) + 10:
@@ -228,9 +230,32 @@ def minion_config(path):
     if 'append_domain' in opts:
         opts['id'] = _append_domain(opts)
 
-    try:
-        opts['master_ip'] = salt.utils.dns_check(opts['master'], True)
-    except SaltClientError:
+    if check_dns:
+        # Because I import salt.log bellow I need to re-import salt.utils here
+        import salt.utils
+        try:
+            opts['master_ip'] = salt.utils.dns_check(opts['master'], True)
+        except SaltClientError:
+            if opts['retry_dns']:
+                while True:
+                    import salt.log
+                    msg = ('Master hostname: {0} not found. Retrying in {1} '
+                           'seconds').format(opts['master'], opts['retry_dns'])
+                    if salt.log.is_console_configured():
+                        log.warn(msg)
+                    else:
+                        print('WARNING: {0}'.format(msg))
+                    time.sleep(opts['retry_dns'])
+                    try:
+                        opts['master_ip'] = salt.utils.dns_check(
+                            opts['master'], True
+                        )
+                        break
+                    except SaltClientError:
+                        pass
+            else:
+                opts['master_ip'] = '127.0.0.1'
+    else:
         opts['master_ip'] = '127.0.0.1'
 
     opts['master_uri'] = 'tcp://{ip}:{port}'.format(ip=opts['master_ip'],
@@ -242,7 +267,7 @@ def minion_config(path):
 
     # set up the extension_modules location from the cachedir
     opts['extension_modules'] = (
-            opts.get('extension_modules') or 
+            opts.get('extension_modules') or
             os.path.join(opts['cachedir'], 'extmods')
             )
 
@@ -337,7 +362,7 @@ def master_config(path):
     opts['aes'] = salt.crypt.Crypticle.generate_key_string()
 
     opts['extension_modules'] = (
-            opts.get('extension_modules') or 
+            opts.get('extension_modules') or
             os.path.join(opts['cachedir'], 'extmods')
             )
     opts['token_dir'] = os.path.join(opts['cachedir'], 'tokens')
@@ -367,6 +392,6 @@ def client_config(path):
     if 'token_file' in opts:
         opts['token_file'] = os.path.expanduser(opts['token_file'])
     if os.path.isfile(opts['token_file']):
-        with open(opts['token_file']) as fp_:
+        with salt.utils.fopen(opts['token_file']) as fp_:
             opts['token'] = fp_.read().strip()
     return opts

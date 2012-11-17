@@ -1,3 +1,4 @@
+# Import Python libs
 import logging
 import os
 import signal
@@ -15,7 +16,7 @@ def set_pidfile(pidfile, user):
     if not os.path.isdir(pdir) and pdir:
         os.makedirs(pdir)
     try:
-        with open(pidfile, 'w+') as f:
+        with salt.utils.fopen(pidfile, 'w+') as f:
             f.write(str(os.getpid()))
     except IOError:
         pass
@@ -24,15 +25,15 @@ def set_pidfile(pidfile, user):
         if os.environ['os'].startswith('Windows'):
             return True
     import pwd  # after confirming not running Windows
-    import grp 
+    #import grp
     try:
         pwnam = pwd.getpwnam(user)
         uid = pwnam[2]
         gid = pwnam[3]
-        groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
+        #groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
     except IndexError:
         err = ('Failed to set the pid to user: '
-                '{0}. The user is not available.\n').format(user)
+               '{0}. The user is not available.\n').format(user)
         sys.stderr.write(err)
         sys.exit(2)
     try:

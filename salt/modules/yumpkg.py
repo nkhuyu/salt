@@ -1,7 +1,9 @@
 '''
 Support for YUM
 
-Required python modules: yum, rpm, rpmUtils
+:depends:   - yum Python module
+            - rpm Python module
+            - rpmUtils Python module
 '''
 try:
     import yum
@@ -12,6 +14,7 @@ except (ImportError, AttributeError):
     has_yumdeps = False
 
 import logging
+import os
 import re
 
 log = logging.getLogger(__name__)
@@ -24,54 +27,62 @@ def __virtual__():
     if not has_yumdeps:
         return False
 
-    # Return this for pkg on RHEL/Fedora based distros that ship with python
-    # 2.6 or greater.
-    dists = ('CentOS', 'Scientific', 'RedHat', 'CloudLinux')
-    if __grains__['os'] == 'Fedora':
-        if int(__grains__['osrelease'].split('.')[0]) >= 11:
-            return 'pkg'
-        else:
-            return False
-    elif __grains__['os'] == 'Amazon':
+    # Work only on RHEL/Fedora based distros with python 2.6 or greater
+    os_grain = __grains__['os']
+    os_family = __grains__['os_family']
+    os_major_release = int(__grains__['osrelease'].split('.')[0])
+
+    # Fedora <= 10 used Python 2.5 and below
+    if os_grain == 'Fedora' and os_major_release >= 11:
+        return 'pkg'
+    elif os_grain == 'Amazon':
         return 'pkg'
     else:
-        if __grains__['os'] in dists:
-            if int(__grains__['osrelease'].split('.')[0]) >= 6:
+        if os_family == 'RedHat' and os_grain != 'Fedora':
+            if os_major_release >= 6:
                 return 'pkg'
-        else:
-            return False
+    return False
 
-if has_yumdeps:
-    class _YumErrorLogger(yum.rpmtrans.NoOutputCallBack):
+class _YumErrorLogger(object):
+    '''
+    A YUM callback handler that logs failed packages with their associated
+    script output.
+
+    See yum.rpmtrans.NoOutputCallBack in the yum package for base
+    implementation.
+    '''
+    def __init__(self):
+        self.messages = {}
+        self.failed = []
+
+    def event(self, package, action, te_current, te_total, ts_current, ts_total):
+        # This would be used for a progress counter according to Yum docs
+        pass
+
+    def log_accumulated_errors(self):
         '''
-        A YUM callback handler that logs failed packages with their associated
-        script output.
+        Convenience method for logging all messages from failed packages
         '''
-        def __init__(self):
-            self.messages = {}
-            self.failed = []
+        for pkg in self.failed:
+            log.error('{0} {1}'.format(pkg, self.messages[pkg]))
 
-        def log_accumulated_errors(self):
-            '''
-            Convenience method for logging all messages from failed packages
-            '''
-            for pkg in self.failed:
-                log.error('{0} {1}'.format(pkg, self.messages[pkg]))
+    def errorlog(self, msg):
+        # Log any error we receive
+        log.error(msg)
 
-        def errorlog(self, msg):
-            # Log any error we receive
-            log.error(msg)
+    def filelog(self, package, action):
+        # TODO: extend this for more conclusive transaction handling for
+        # installs and removes VS. the pkg list compare method used now.
+        #
+        # See yum.constants and yum.rpmtrans.RPMBaseCallback in the yum
+        # package for more information about the received actions.
+        if action == yum.constants.TS_FAILED:
+            self.failed.append(package)
 
-        def filelog(self, package, action):
-            # TODO: extend this for more conclusive transaction handling for
-            # installs and removes VS. the pkg list compare method used now.
-            if action == yum.constants.TS_FAILED:
-                self.failed.append(package)
-
-        def scriptout(self, package, msgs):
-            # This handler covers ancillary messages coming from the RPM script
-            # Will sometimes contain more detailed error messages.
-            self.messages[package] = msgs
+    def scriptout(self, package, msgs):
+        # This handler covers ancillary messages coming from the RPM script
+        # Will sometimes contain more detailed error messages.
+        self.messages[package] = msgs
 
 
 def _list_removed(old, new):
@@ -97,17 +108,17 @@ def _parse_pkg_meta(path):
     if result['retcode'] == 0:
         for line in result['stdout'].splitlines():
             if not name:
-                m = re.match('^Name\s*:\s*(.+)\s*$', line)
+                m = re.match('^Name\s*:\s*(\S+)', line)
                 if m:
                     name = m.group(1)
                     continue
             if not version:
-                m = re.match('^Version\s*:\s*(.+)\s*$', line)
+                m = re.match('^Version\s*:\s*(\S+)', line)
                 if m:
                     version = m.group(1)
                     continue
             if not rel:
-                m = re.match('^Release\s*:\s*(.+)\s*$', line)
+                m = re.match('^Release\s*:\s*(\S+)', line)
                 if m:
                     version = m.group(1)
                     continue
@@ -292,21 +303,26 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, sources=None,
     Install the passed package(s)
 
     pkgs
-        The name of the package(s) to be installed
-    refresh : False
-        Clean out the yum database before executing
-    repo : (default)
-        Specify a package repository to install from
+        The name of the package(s) to be installed. Can be comma separated, or
+        space separated if the parameter is encased in quotes.
+
+    refresh
+        Clean out the yum database before executing. Defaults to False.
+
+    repo
+        Specify a package repository to install from.
         (e.g., ``yum --enablerepo=somerepo``)
-    skip_verify : False
-        Skip the GPG verification check (e.g., ``--nogpgcheck``)
-    sources: None
-        A list of rpm sources to use for installing these packages.
+
+    skip_verify
+        Skip the GPG verification check. (e.g., ``--nogpgcheck``)
+
+    sources
+        A list of rpm sources to use for installing the package(s).
 
     Return a dict containing the new package names and versions::
 
         {'<package>': {'old': '<old-version>',
-                   'new': '<new-version>']}
+                       'new': '<new-version>']}
 
     CLI Example::
 
@@ -320,7 +336,7 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, sources=None,
     else:
         pkgs = pkgs.split(' ')
 
-    if sources:
+    if sources is not None:
         if ',' in sources:
             srcsplit = sources.split(',')
         else:
@@ -333,20 +349,43 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, sources=None,
                       '({1})'.format(len(srcsplit), len(pkgs)))
             return {}
 
-        sources = [
-            __salt__['cp.cache_file'](x)
-            if __salt__['config.valid_fileproto'](x) else x
-            for x in srcsplit
-        ]
+        srcinfo = []
+        for src in srcsplit:
+            if __salt__['config.valid_fileproto'](src):
+                # Cached RPM from master
+                srcinfo.append((__salt__['cp.cache_file'](src),'remote'))
+            else:
+                # RPM file local to the minion
+                srcinfo.append((src,'local'))
 
         # Check metadata to make sure the name passed matches the source
+        problems = []
         for i in range(0, len(pkgs)):
-            pname, pversion = _parse_pkg_meta(sources[i])
-            if pkgs[i] != pname:
-                log.error('Package file {0} (Name: {1}) does not '
-                          'match the specified package name '
-                          '({2})'.format(sources[i], pname, pkgs[i]))
-                return {}
+            rpm_path, pkg_type = srcinfo[i]
+            pname, pversion = _parse_pkg_meta(rpm_path)
+            if not pname:
+                if pkg_type == 'remote':
+                    problems.append('Failed to cache {0}. Are you sure this '
+                                    'path is correct?'.format(srcsplit[i]))
+                elif pkg_type == 'local':
+                    if not os.path.isfile(rpm_path):
+                        problems.append('Package file {0} not found. Are '
+                                        'you sure this path is '
+                                        'correct?'.format(rpm_path))
+                    else:
+                        problems.append('Unable to parse package metadata for '
+                                        '{0}'.format(rpm_path))
+            elif pkgs[i] != pname:
+                problems.append('Package file {0} (Name: {1}) does not '
+                                'match the specified package name '
+                                '({2})'.format(srcsplit[i], pname, pkgs[i]))
+
+        # If any problems are found in the caching or metadata parsing done in
+        # the above for loop, log each problem and then return an empty dict.
+        # Do not proceed to attempt package installation.
+        if problems:
+            for problem in problems: log.error(problem)
+            return {}
 
     old = list_pkgs(*pkgs)
 
@@ -361,16 +400,16 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, sources=None,
     for i in range(0, len(pkgs)):
         try:
             if sources is not None:
-                target = sources[i]
+                rpm_path, pkg_type = srcinfo[i]
                 log.info(
-                    'Selecting \'{0}\' for local installation'.format(target)
+                    'Selecting \'{0}\' for local installation'.format(rpm_path)
                 )
-                a = yb.installLocal(target)
+                a = yb.installLocal(rpm_path)
                 # if yum didn't install anything, maybe its a downgrade?
                 log.debug('Added {0} transactions'.format(len(a)))
-                if len(a) == 0:
+                if len(a) == 0 and rpm_path not in old.keys():
                     log.info('Upgrade failed, trying local downgrade')
-                    a = yb.downgradeLocal(target)
+                    a = yb.downgradeLocal(rpm_path)
             else:
                 target = pkgs[i]
                 log.info('Selecting \'{0}\' for installation'.format(target))
@@ -378,7 +417,7 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, sources=None,
                 a = yb.install(pattern=target)
                 # if yum didn't install anything, maybe its a downgrade?
                 log.debug('Added {0} transactions'.format(len(a)))
-                if len(a) == 0:
+                if len(a) == 0 and target not in old.keys():
                     log.info('Upgrade failed, trying downgrade')
                     a = yb.downgrade(pattern=target)
         except Exception:

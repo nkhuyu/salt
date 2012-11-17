@@ -9,6 +9,7 @@ import re
 import imp
 import random
 import sys
+import fcntl
 import socket
 import logging
 import inspect
@@ -195,7 +196,7 @@ def daemonize_if(opts, **kwargs):
     daemonize()
     sdata = {'pid': os.getpid()}
     sdata.update(data)
-    with open(fn_, 'w+') as f:
+    with salt.utils.fopen(fn_, 'w+') as f:
         f.write(serial.dumps(sdata))
 
 
@@ -332,7 +333,7 @@ def dns_check(addr, safe=False):
                     # the master or minion instance calling this hasn't even
                     # started running
                     logging.getLogger(__name__).error(err)
-                raise SaltClientError
+                raise SaltClientError()
             else:
                 err = err.format(addr)
                 sys.stderr.write(err)
@@ -385,7 +386,7 @@ def prep_jid(cachedir, sum_type, user='root'):
     jid_dir_ = jid_dir(jid, cachedir, sum_type)
     if not os.path.isdir(jid_dir_):
         os.makedirs(jid_dir_)
-        with open(os.path.join(jid_dir_, 'jid'), 'w+') as fn_:
+        with salt.utils.fopen(os.path.join(jid_dir_, 'jid'), 'w+') as fn_:
             fn_.write(jid)
     else:
         return prep_jid(cachedir, sum_type)
@@ -433,8 +434,7 @@ def copyfile(source, dest, backup_mode='', cachedir=''):
                 )
     bname = os.path.basename(dest)
     dname = os.path.dirname(os.path.abspath(dest))
-    fd_, tgt = tempfile.mkstemp(prefix=bname, dir=dname)
-    os.close(fd_)
+    tgt = mkstemp(prefix=bname, dir=dname)
     shutil.copyfile(source, tgt)
     mask = os.umask(0)
     os.umask(mask)
@@ -460,15 +460,12 @@ def copyfile(source, dest, backup_mode='', cachedir=''):
     if backup_mode == 'master' or backup_mode == 'both' and bkroot:
         # TODO, backup to master
         pass
-    try:
-        shutil.move(tgt, dest)
-        # If SELINUX is available run a restorecon on the file
-        rcon = which('restorecon')
-        if rcon:
-            cmd = [rcon, dest]
-            subprocess.call(cmd)
-    except Exception:
-        pass
+    shutil.move(tgt, dest)
+    # If SELINUX is available run a restorecon on the file
+    rcon = which('restorecon')
+    if rcon:
+        cmd = [rcon, dest]
+        subprocess.call(cmd)
     if os.path.isfile(tgt):
         # The temp file failed to move
         try:
@@ -509,7 +506,7 @@ def pem_finger(path, sum_type='md5'):
     '''
     if not os.path.isfile(path):
         return ''
-    with open(path, 'rb') as fp_:
+    with salt.utils.fopen(path, 'rb') as fp_:
         key = ''.join(fp_.readlines()[1:-1])
     pre = getattr(hashlib, sum_type)(key).hexdigest()
     finger = ''
@@ -725,3 +722,39 @@ def memoize(func):
             cache[args] = func(*args)
         return cache[args]
     return _m
+
+
+def fopen(*args, **kwargs):
+    '''
+    Wrapper around open() built-in to set CLOEXEC on the fd.
+
+    This flag specifies that the file descriptor should be closed when an exec
+    function is invoked;
+    When a file descriptor is allocated (as with open or dup ), this bit is
+    initially cleared on the new file descriptor, meaning that descriptor will
+    survive into the new program after exec.
+    '''
+    fhandle = open(*args, **kwargs)
+    try:
+        FD_CLOEXEC = fcntl.FD_CLOEXEC
+    except AttributeError:
+        FD_CLOEXEC = 1
+    old_flags = fcntl.fcntl(fhandle.fileno(), fcntl.F_GETFD)
+    fcntl.fcntl(fhandle.fileno(), fcntl.F_SETFD, old_flags | FD_CLOEXEC)
+    return fhandle
+
+
+def mkstemp(*args, **kwargs):
+    '''
+    Helper function which does exactly what `tempfile.mkstemp()` does but
+    accepts another argument, `close_fd`, which, by default, is true and closes
+    the fd before returning the file path. Something commonly done throughout
+    Salt's code.
+    '''
+    close_fd = kwargs.pop('close_fd', True)
+    fd_, fpath = tempfile.mkstemp(*args, **kwargs)
+    if close_fd is False:
+        return (fd_, fpath)
+    os.close(fd_)
+    del(fd_)
+    return fpath

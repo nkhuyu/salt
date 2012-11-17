@@ -5,6 +5,7 @@ import shutil
 import tempfile
 
 # Import salt libs
+from salt import version
 from saltunittest import TestLoader, TextTestRunner
 import integration
 from integration import TestDaemon
@@ -37,8 +38,15 @@ class KeyTest(integration.ShellCase,
         test salt-key -L --json-out
         '''
         data = self.run_key('-L --json-out')
+        if version.__version_info__ < (0, 10, 8):
+            expect = [
+                "WARNING: The option --json-out is deprecated. Please "
+                "consider using '--out json' instead."
+            ]
+        else:
+            expect = []
 
-        expect = [
+        expect += [
             '{',
             '    "minions_rejected": [], ',
             '    "minions_pre": [], ',
@@ -55,8 +63,15 @@ class KeyTest(integration.ShellCase,
         test salt-key -L --yaml-out
         '''
         data = self.run_key('-L --yaml-out')
-        expect = [
-            'minions:'] + [
+        if version.__version_info__ < (0, 10, 8):
+            expect = [
+                "WARNING: The option --yaml-out is deprecated. Please "
+                "consider using '--out yaml' instead."
+            ]
+        else:
+            expect = []
+
+        expect += ['minions:'] + [
             '- {0}'.format(m) for m in self.get_running_minions()] + [
             'minions_pre: []',
             'minions_rejected: []',
@@ -68,9 +83,17 @@ class KeyTest(integration.ShellCase,
         test salt-key -L --raw-out
         '''
         data = self.run_key('-L --raw-out')
+        if version.__version_info__ < (0, 10, 8):
+            expect = [
+                "WARNING: The option --raw-out is deprecated. Please "
+                "consider using '--out raw' instead."
+            ]
+        else:
+            expect = []
+
         running = self.get_running_minions()
         last = running.pop(-1)
-        expect = [
+        expect += [
             "{'minions': [" + '{0!r}'.format(running.pop(0)) + ","] + [
                 '             {0!r},'.format(m) for m in running
                 ] + [
