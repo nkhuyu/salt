@@ -228,20 +228,28 @@ class TestDaemon(object):
         self.syndic_process = multiprocessing.Process(target=syndic.tune_in)
         self.syndic_process.start()
 
-        #if os.environ.get('DUMP_SALT_CONFIG', None) is not None:
-        #    try:
-        #        import yaml
-        #        os.makedirs('/tmp/salttest/conf')
-        #    except OSError:
-        #        pass
-        #    self.master_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
-        #    self.minion_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
-        #    open('/tmp/salttest/conf/master', 'w').write(
-        #        yaml.dump(self.master_opts)
-        #    )
-        #    open('/tmp/salttest/conf/minion', 'w').write(
-        #        yaml.dump(self.minion_opts)
-        #    )
+        if os.environ.get('DUMP_SALT_CONFIG', None) is not None:
+            from copy import deepcopy
+            try:
+                import yaml
+                os.makedirs('/tmp/salttest/conf')
+            except OSError:
+                pass
+            master_opts = deepcopy(self.master_opts)
+            minion_opts = deepcopy(self.minion_opts)
+            master_opts.pop('conf_file', None)
+            master_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
+
+            minion_opts['user'] = pwd.getpwuid(os.getuid()).pw_name
+            minion_opts.pop('conf_file', None)
+            minion_opts.pop('grains', None)
+            minion_opts.pop('pillar', None)
+            open('/tmp/salttest/conf/master', 'w').write(
+                yaml.dump(master_opts)
+            )
+            open('/tmp/salttest/conf/minion', 'w').write(
+                yaml.dump(minion_opts)
+            )
 
         # Let's create a local client to ping and sync minions
         self.client = salt.client.LocalClient(
