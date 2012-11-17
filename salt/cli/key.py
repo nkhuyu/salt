@@ -202,7 +202,7 @@ class Key(object):
         keys = self._keys('pre', True).union(self._keys('acc', True))
         for key in sorted(keys):
             if key.endswith(name):
-                with open(key, 'r') as kfn:
+                with salt.utils.fopen(key, 'r') as kfn:
                     self._log(kfn.read())
 
     def _print_all(self):
@@ -218,7 +218,7 @@ class Key(object):
                 os.path.basename(key),
                 self.colors['ENDC']
                 ))
-            with open(key, 'r') as kfn:
+            with salt.utils.fopen(key, 'r') as kfn:
                 self._log(kfn.read())
         self._log('{0}Accepted keys:{1}'.format(
             self.colors['LIGHT_GREEN'], self.colors['ENDC']
@@ -229,7 +229,7 @@ class Key(object):
                 os.path.basename(key),
                 self.colors['ENDC']
                 ))
-            with open(key, 'r') as kfn:
+            with salt.utils.fopen(key, 'r') as kfn:
                 self._log(kfn.read())
         self._log('{0}Rejected keys:{1}'.format(
             self.colors['LIGHT_BLUE'], self.colors['ENDC']
@@ -239,7 +239,7 @@ class Key(object):
                 self.colors['BLUE'],
                 os.path.basename(key),
                 self.colors['ENDC']))
-            with open(key, 'r') as kfn:
+            with salt.utils.fopen(key, 'r') as kfn:
                 self._log(kfn.read())
 
     def _accept(self, key):
