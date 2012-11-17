@@ -5,6 +5,7 @@ pkg:
   supervisor: supervisor
   python-mock: python-mock
   python-virtualenv: python-virtualenv
+  rabbitmq-server: rabbitmq-server
 
     {% if grains['os'] == 'Fedora' %}
   python-dev: python-devel
@@ -19,6 +20,7 @@ pkg:
   python-mock: python-mock
   python-virtualenv: python-virtualenv
   python-dev: python-dev
+  rabbitmq-server: rabbitmq-server
 
   {% elif grains['os'] == 'Arch' %}
   git: git
