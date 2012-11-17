@@ -1,24 +1,13 @@
-runtests-pkg-deps:
-  pkg.installed:
-    - names:
-      - {{ pillar['pkg']['git'] }}
-      - {{ pillar['pkg']['supervisor'] }}
-      - {{ pillar['pkg']['python-mock'] }}
-      - {{ pillar['pkg']['python-virtualenv'] }}
-{% if grains['os'] not in ('Arch',) %}
-      - {{ pillar['pkg']['python-dev'] }}
-{% endif %}
-
-
 /tmp/ve:
   virtualenv.manage:
     - runas: vagrant
     - distribute: True
     - no_site_packages: False
-    #- system_site_packages: True
+    {% if salt['runtests.virtualenv_has_system_site_packages']()==True -%}
+    - system_site_packages: True
+    {%- endif %}
     - mirrors: http://testpypi.python.org/pypi
-    - require:
-      - pkg: {{ pillar['pkg']['python-virtualenv'] }}
+
 
 ve-saltdevel-install:
   cmd.run:
@@ -30,14 +19,7 @@ ve-saltdevel-install:
     - unless: test -d /tmp/ve/bin
     - require:
       - virtualenv: /tmp/ve
-      - pkg: {{ pillar['pkg']['supervisor'] }}
-      - pkg: {{ pillar['pkg']['python-mock'] }}
 
-#/home/vagrant/.bashrc:
-#  file.append:
-#    - text: export PATH=/tmp/ve/bin:$PATH
-#    - require:
-#      - virtualenv: /tmp/ve
 
 coverage:
   pip.installed:
@@ -45,11 +27,11 @@ coverage:
     - runas: vagrant
     - bin_env: /tmp/ve
     - require:
-      - pkg: {{ pillar['pkg']['git'] }}
-      - pkg: {{ pillar['pkg']['python-dev'] }}
       - virtualenv: /tmp/ve
 
-{% if (grains['pythonversion'][0]|int, grains['pythonversion'][1]|int) < (2, 7) %}
+
+{% if salt['runtests.unittest2_required']() %}
+# Because we're on python 2.6
 unittest2:
   pip.installed:
     - name: unittest2
@@ -58,6 +40,19 @@ unittest2:
     - require:
       - virtualenv: /tmp/ve
 {% endif %}
+
+
+{% if salt['runtests.ordereddict_required']() %}
+# Because we're on python 2.6
+OrderedDict:
+  pip.installed:
+    - name: ordereddict
+    - runas: vagrant
+    - bin_env: /tmp/ve
+    - require:
+      - virtualenv: /tmp/ve
+{% endif %}
+
 
 unittest-xml-reporting:
   pip.installed:

@@ -7,6 +7,7 @@
 
 # Import python modules
 import os
+import sys
 import shutil
 import logging
 import cPickle
@@ -34,8 +35,10 @@ def run_tests(module=False, state=False, client=False, shell=False,
     """
     Run tests.
     """
-    python_bin = '/tmp/ve/bin/python'
+    venv_bin = '/tmp/ve/bin'
+    python_bin = os.path.join(venv_bin, 'python')
     runtests_bin = '/salt/source/tests/runtests.py'
+    activate_source = os.path.join(venv_bin, 'activate')
 
     if not __salt__['cmd.has_exec'](python_bin):
         raise CommandExecutionError(
@@ -73,7 +76,6 @@ def run_tests(module=False, state=False, client=False, shell=False,
         )
         shutil.copytree('/salt/source/', cwd, symlinks=True)
         runtests_bin = os.path.join(cwd, 'tests', 'runtests.py')
-
 
     if not __salt__['cmd.has_exec'](runtests_bin):
         raise CommandExecutionError(
@@ -127,9 +129,9 @@ def run_tests(module=False, state=False, client=False, shell=False,
     if coverage_output:
         arg.append('--coverage-output={0}'.format(coverage_output))
 
-    env = dict(COLUMNS=str(pnum), PNUM=str(pnum))
-    cmd = 'COLUMNS={0} {1} {2} {3}'.format(
-        pnum, python_bin, runtests_bin, ' '.join(arg)
+    env = dict(COLUMNS=str(pnum), PNUM=str(pnum), VAGRANT_RUNTESTS='1')
+    cmd = 'export VAGRANT_RUNTESTS=1; export COLUMNS={0}; . {1}; {2} {3} {4}'.format(
+        pnum, activate_source, python_bin, runtests_bin, ' '.join(arg)
     )
     log.info('Running command {0!r}'.format(cmd))
     return __salt__['cmd.run_all'](cmd, cwd=cwd, runas='root', env=env)
@@ -145,3 +147,36 @@ def get_coverage():
     except Exception, err:
         log.error('Failed to load coverage pickled data: {0}'.format(err))
     return ''
+
+
+# These functions are used within' state files,
+def unittest2_required():
+    """
+    Python versions before 2.7 do not ship with unittest.
+    """
+    return sys.version_info < (2, 7)
+
+
+def ordereddict_required():
+    '''
+    Python versions before 2.7 do not ship with OrderedDict
+    '''
+    return unittest2_required()
+
+
+def virtualenv_has_system_site_packages():
+    """
+    Virtualenv prior to version 1.7 does not have the --system-site-packages
+    option available.
+    """
+    try:
+        import virtualenv
+    except ImportError:
+        return None
+
+    try:
+        venv_version = virtualenv.__version__.split('.')
+    except AttributeError:
+        venv_version = virtualenv.virtualenv_version.split('.')
+
+    return tuple([int(i) for i in venv_version]) >= (1, 7)
