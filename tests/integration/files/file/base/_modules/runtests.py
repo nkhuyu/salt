@@ -30,7 +30,8 @@ def run_tests(module=False, state=False, client=False, shell=False,
               runner=False, unit=False, verbose=1, xml=False, name=[],
               clean=False, no_clean=False, run_destructive=False,
               no_report=False, coverage=False, no_coverage_report=False,
-              coverage_output=None, pnum=70, cwd=tempfile.gettempdir()):
+              coverage_output=None, screen_width=80, screen_height=25,
+              cwd=tempfile.gettempdir()):
 
     """
     Run tests.
@@ -112,8 +113,10 @@ def run_tests(module=False, state=False, client=False, shell=False,
         arg.append('-{0}'.format('v' * verbose))
     if xml:
         arg.append('--xml')
-    for test in name:
-        arg.append('-n {0}'.format(test))
+    if name:
+        arg.extend([
+            '-n {0}'.format(test) for test in name.split(':')
+        ])
     if clean:
         arg.append('--clean')
     if no_clean:
@@ -129,9 +132,17 @@ def run_tests(module=False, state=False, client=False, shell=False,
     if coverage_output:
         arg.append('--coverage-output={0}'.format(coverage_output))
 
-    env = dict(COLUMNS=str(pnum), PNUM=str(pnum), VAGRANT_RUNTESTS='1')
-    cmd = 'export VAGRANT_RUNTESTS=1; export COLUMNS={0}; . {1}; {2} {3} {4}'.format(
-        pnum, activate_source, python_bin, runtests_bin, ' '.join(arg)
+    env = dict(
+        COLUMNS=str(screen_width),
+        LINES=str(screen_height),
+        VAGRANT_RUNTESTS='1'
+    )
+    cmd = (
+        'export VAGRANT_RUNTESTS=1; export COLUMNS={0}; export LINES={1}; '
+        '. {2}; {3} {4} {5}'.format(
+            screen_width, screen_height, activate_source, python_bin,
+            runtests_bin, ' '.join(arg)
+        )
     )
     log.info('Running command {0!r}'.format(cmd))
     return __salt__['cmd.run_all'](cmd, cwd=cwd, runas='root', env=env)

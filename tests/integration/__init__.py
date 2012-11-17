@@ -33,6 +33,8 @@ try:
     PNUM = width
 except:
     PNUM = 70
+    # Default on console.py
+    width, height = (80, 25)
 
 
 INTEGRATION_TEST_DIR = os.path.dirname(
@@ -680,11 +682,10 @@ class VagrantTestDaemon(TestDaemon):
     def __run_tests_target(self, start_evt, finish_evt, progress_evt):
         sleep = 60
         print_header(
-            'Waiting at most {0} secs for minions to connect '
+            'Waiting at most {0} secs for remote minions to connect '
             'back'.format(sleep), sep='=', centered=True
         )
         expected_connection = set(self.__machines.keys())
-        print
         while sleep > 0:
             # Let's get the minions who are responding back
             targets = filter(
@@ -971,12 +972,13 @@ class VagrantTestDaemon(TestDaemon):
             run_destructive=True,
             no_coverage_report=True,
             verbose=self.opts.verbosity,
-            #name=self.opts.name is self.opts.name or None,
+            name=(':'.join(self.opts.name) if self.opts.name else None),
             #unit=True,
-            shell=True,
+            #shell=True,
             #module=True,
             #states=True,
-            pnum=PNUM,
+            screen_width=width,
+            screen_height=height,
             cwd=os.getcwd()
         )
         if self.opts.xmlout:
