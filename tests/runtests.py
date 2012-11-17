@@ -166,9 +166,6 @@ def run_integration_tests(opts):
         from integration import TestDaemon
 
     with TestDaemon(opts) as test_daemon:
-        # Let's store in the environment the running minions used in tests
-        test_daemon.query_running_vagrant_minions()
-
         if opts.name:
             for name in opts.name:
                 results = run_suite(opts, '', name)
@@ -369,11 +366,13 @@ def parse_opts():
                 'to produce incorrect results. Please consider upgrading...'
             )
 
-        if not options.vagrant_test and any(
+        env_runtests = int(os.environ.get('VAGRANT_RUNTESTS', '0'))
+
+        if (not env_runtests and not options.vagrant_test) and any(
                         (options.module, options.client, options.shell,
                          options.unit, options.state, options.runner,
-                         options.name,
-                         os.geteuid() is not 0, not options.run_destructive)):
+                         options.name, os.geteuid() is not 0,
+                         not options.run_destructive)):
             parser.error(
                 'No sense in generating the tests coverage report when not '
                 'running the full test suite, including the destructive '
@@ -449,32 +448,30 @@ def stop_coverage(opts):
             shutil.rmtree(opts.coverage_output)
 
         coverage_files = sorted(glob.glob(COVERAGE_FILE + '*'))
-        common_prefix = os.path.commonprefix(coverage_files)
         for cname in coverage_files:
-            cname_parts = cname.split('.')
             # The backup name needs to be like this so it does not get picked
             # up by the combine() call bellow.
             cname_backup = os.path.join(
-                cname_parts[0], '.bak.{0}'.format('.'.join(cname_parts[1:]))
+                os.path.dirname(cname),
+                '.bak.{0}'.format(os.path.basename(cname))
             )
             if os.path.isfile(cname_backup):
                 os.remove(cname_backup)
 
             shutil.copyfile(cname, cname_backup)
 
-            if cname_parts[-1] == 'coverage':
+            report_dir_name = os.path.basename(cname.lstrip(COVERAGE_FILE))
+            if report_dir_name == '':
                 # This is the test suite which gathers info from all running
                 # vagrant machines
-                cname_parts[-1] = 'Starter Machine'
+                report_dir_name = 'Starter Machine'
 
             print(
-                '    * Generating coverage report for {0} ...'.format(
-                    cname_parts[-1]
-                )
+                '    * Generating coverage report for {0} ...'.format(cname)
             ),
             sys.stdout.flush()
 
-            report_dir = os.path.join(opts.coverage_output, cname_parts[-1])
+            report_dir = os.path.join(opts.coverage_output, report_dir_name)
 
             try:
                 partial_coverage = coverage.coverage(
@@ -487,8 +484,12 @@ def stop_coverage(opts):
                     directory=report_dir
                 )
             except CoverageException, err:
-                print('Error while generating coverage report '
-                      'for {0}: {1}'.format(cname_parts[-1], err))
+                print(
+                    'Error while generating coverage report for '
+                    '{0}: {1}'.format(
+                        report_dir_name, err
+                    )
+                )
             else:
                 print('OK')
 
@@ -553,7 +554,7 @@ if __name__ == '__main__':
         no_problems_found = False
 
         print_header(
-            u'\u22c6\u22c6\u22c6 {0}  '.format(name),
+            u'\u22c6\u22c6\u22c6 {0}  '.format(unicode(name)),
             sep=u'\u22c6', inline=True
         )
         if results.skipped:
@@ -568,7 +569,7 @@ if __name__ == '__main__':
 
         if results.errors:
             print_header(
-                u' --------  Tests with Errors  ', sep='-', inline=True
+                u' --------  Tests with Errors  ', sep=u'-', inline=True
             )
             for tc, reason in results.errors:
                 print_header(
@@ -580,15 +581,15 @@ if __name__ == '__main__':
             print_header(u' ', sep='-', inline=True)
 
         if results.failures:
-            print_header(u' --------  Failed Tests  ', sep='-', inline=True)
+            print_header(u' --------  Failed Tests  ', sep=u'-', inline=True)
             for tc, reason in results.failures:
                 print_header(
                     u'   \u2192 {0}  '.format(tc.id()), sep=u'.', inline=True
                 )
                 for line in reason.rstrip().splitlines():
-                    print('       {0}'.format(line.rstrip()))
+                    print(u'       {0}'.format(line.rstrip()))
                 print_header(u'   ', sep=u'.', inline=True)
-            print_header(u' ', sep='-', inline=True)
+            print_header(u' ', sep=u'-', inline=True)
 
         print_header(u'', sep=u'\u22c6', inline=True)
 
