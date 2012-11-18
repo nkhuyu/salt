@@ -326,17 +326,24 @@ def parse_opts():
         )
     )
     vagrant_group.add_option(
-        '--vagrant-test',
+        '--vagrant-test', '--vg-test',
         default=False,
         action='store_true',
         help='Run the test suite within the testing vagrant machines'
     )
     vagrant_group.add_option(
-        '--vagrant-no-stop',
+        '--vagrant-no-stop', '--vg-no-stop',
         default=False,
         action='store_true',
         help='Do NOT stop the vagrant machines when done running the '
              'tests suite.'
+    )
+    vagrant_group.add_option(
+        '--vagrant-same-tests', '--vg-same-tests',
+        default=False,
+        action='store_true',
+        help='Run the same tests both locally and remotely. Useful for '
+             'example when passing test names.'
     )
     parser.add_option_group(vagrant_group)
 
