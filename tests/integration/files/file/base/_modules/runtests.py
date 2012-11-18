@@ -47,7 +47,7 @@ def run_tests(module=False, state=False, client=False, shell=False,
             )
         )
 
-    if coverage:
+    if coverage in (True, 'True'):
         cwd_dirname = os.path.dirname(cwd)
         log.warning(
             'In order to properly combine coverage data, the tests need to '
@@ -96,37 +96,37 @@ def run_tests(module=False, state=False, client=False, shell=False,
         verbose = 1
 
     arg = []
-    if module:
+    if module in (True, 'True'):
         arg.append('--module')
-    if state:
+    if state in (True, 'True'):
         arg.append('--state')
-    if client:
+    if client in (True, 'True'):
         arg.append('--client')
-    if shell:
+    if shell in (True, 'True'):
         arg.append('--shell')
-    if runner:
+    if runner in (True, 'True'):
         arg.append('--runner')
-    if unit:
+    if unit in (True, 'True'):
         arg.append('--unit')
     if verbose > 0:
         arg.append('-{0}'.format('v' * verbose))
-    if xml:
+    if xml in (True, 'True'):
         arg.append('--xml')
     if name:
         arg.extend([
             '-n {0}'.format(test) for test in name.split(':')
         ])
-    if clean:
+    if clean in (True, 'True'):
         arg.append('--clean')
-    if no_clean:
+    if no_clean in (True, 'True'):
         arg.append('--no-clean')
-    if run_destructive:
+    if run_destructive in (True, 'True'):
         arg.append('--run-destructive')
-    if no_report:
+    if no_report in (True, 'True'):
         arg.append('--no-report')
-    if coverage:
+    if coverage in (True, 'True'):
         arg.append('--coverage')
-    if no_coverage_report:
+    if no_coverage_report in (True, 'True'):
         arg.append('--no-coverage-report')
     if coverage_output:
         arg.append('--coverage-output={0}'.format(coverage_output))
