@@ -1,3 +1,4 @@
+{% if salt['runtests.saltsource_on_shared_folders']()==False %}
 clean-previous:
   cmd.run:
     - name: rm -rf /salt
@@ -36,3 +37,4 @@ create-salt-dir:
     - require:
       - cmd: clean-previous
 
+{% endif %}

@@ -32,10 +32,9 @@ def run_tests(module=False, state=False, client=False, shell=False,
               no_report=False, coverage=False, no_coverage_report=False,
               coverage_output=None, screen_width=80, screen_height=25,
               cwd=tempfile.gettempdir()):
-
-    """
+    '''
     Run tests.
-    """
+    '''
     venv_bin = '/tmp/ve/bin'
     python_bin = os.path.join(venv_bin, 'python')
     runtests_bin = '/salt/source/tests/runtests.py'
@@ -161,10 +160,18 @@ def get_coverage():
 
 
 # These functions are used within' state files,
+def saltsource_on_shared_folders():
+    '''
+    Is salt source mounted as a virtualbox shared folder?
+    If it is, should be listed in active mounts
+    '''
+    return '/salt/source' in __salt__['mount.active']()
+
+
 def unittest2_required():
-    """
+    '''
     Python versions before 2.7 do not ship with unittest.
-    """
+    '''
     return sys.version_info < (2, 7)
 
 
