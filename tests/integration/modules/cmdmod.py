@@ -1,6 +1,5 @@
 # Import python libs
 import os
-import pwd
 
 # Import salt libs
 import integration
@@ -19,8 +18,13 @@ class CMDModuleTest(integration.ModuleCase):
         # machines, for example), there's no shell environment variable set.
         #
         # We can however use pwd to still get that information.
-        uinfo = pwd.getpwuid(os.getuid())
-        shell = uinfo.pw_shell
+        try:
+            import pwd
+            uinfo = pwd.getpwuid(os.getuid())
+            shell = uinfo.pw_shell
+        except ImportError:
+            # Windows machine
+            shell = os.environ.get('SHELL', None)
 
         if not shell:
             self.skipTest('Failed to get the current user\'s SHELL')
