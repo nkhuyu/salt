@@ -130,7 +130,13 @@ sys.stdout.write('cheese')
         # machines, for example), we can't get os.getlogin()
         #
         # We can however use pwd to still get that information.
-        runas = pwd.getpwuid(os.getuid()).pw_name
+        try:
+            import pwd
+            runas = pwd.getpwuid(os.getuid()).pw_name
+        except ImportError:
+            # Windows machine?
+            # Let's try old beaviour
+            runas = os.getlogin()
 
         cmd = '''echo 'SELECT * FROM foo WHERE bar="baz"' '''
         expected_result = 'SELECT * FROM foo WHERE bar="baz"'
