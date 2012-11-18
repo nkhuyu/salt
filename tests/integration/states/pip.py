@@ -25,6 +25,13 @@ class PipStateTest(integration.ModuleCase):
             integration.SYS_TMP_DIR, 'pip-installed-errors'
         )
         try:
+            import pwd
+            uinfo = pwd.getpwuid(os.getuid())
+            shell = uinfo.pw_shell
+        except ImportError:
+            # Windows machine
+            shell = r'.*'
+        try:
             # Since we don't have the virtualenv created, pip.installed will
             # thrown and error.
             ret = self.run_function('state.sls', mods='pip-installed-errors')
@@ -35,9 +42,20 @@ class PipStateTest(integration.ModuleCase):
                 self.assertFalse(ret[key]['result'])
                 self.assertRegexpMatches(
                     ret[key]['comment'],
-                    'Error installing \'supervisor\': .* '
+                    'Error installing \'supervisor\': {0}: {1}: '
+                    '('
+                    # Running test locally the expected output is
                     '[nN]o such file or directory'
+                    # Or
+                    '|'
+                    # Running test from within a vagrant machine using our
+                    # runtests custom script, the expected output is
+                    'not found'
+                    ')'.format(shell, venv_dir)
                 )
+                # For those that did not understand, all the above strings are
+                # for the following regex part:
+                #   ([nN]o such file or directory|not found)
 
             # We now create the missing virtualenv
             ret = self.run_function('virtualenv.create', [venv_dir])
