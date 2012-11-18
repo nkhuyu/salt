@@ -136,6 +136,7 @@ class TestDaemon(object):
 
     def __init__(self, opts):
         self.opts = opts
+        self.colors = get_colors(opts.no_colors is False)
 
     def __enter__(self):
         '''
@@ -376,9 +377,10 @@ class TestDaemon(object):
                 return True
             if evt is None or (evt is not None and evt.is_set()):
                 sys.stdout.write(
-                    '    * [Quit in {0}] Waiting for {1}'.format(
+                    '    * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
                         '{0}'.format(expire - now).rsplit('.', 1)[0],
-                        ', '.join(running)
+                        ', '.join(running),
+                        **self.colors
                     )
                 )
                 sys.stdout.flush()
@@ -987,7 +989,7 @@ class VagrantTestDaemon(TestDaemon):
                 shell=self.opts.shell,
                 runner=self.opts.runner,
                 unit=self.opts.unit,
-                name=(':'.join(self.opts.name) if self.opts.name else None),
+                name=(':'.join(self.opts.name) if self.opts.name else ''),
             )
 
         run_tests_arg = [
@@ -1042,7 +1044,7 @@ class VagrantTestDaemon(TestDaemon):
 
                     print
                     if idx + 1 % 2:
-                        print(get_colors(True)['LIGHT_BLUE'])
+                        print(self.colors['LIGHT_BLUE'])
                     print_header(
                         '  {0} ~ Remote Test Results ~ {1}  '.format(
                             name,
@@ -1055,7 +1057,7 @@ class VagrantTestDaemon(TestDaemon):
 
                     print_header('~', inline=True)
                     if idx + 1 % 2:
-                        print(get_colors(True)['ENDC'])
+                        print(self.colors['ENDC'])
 
             if not running:
                 # All remote tests have finished. Exit the loop
@@ -1442,5 +1444,4 @@ class QueryRunningMinionsMixIn(object):
                     name for (name, running) in targets.iteritems()
                     if running is True
                 ])
-        print 777, self.__running_minions
         return self.__running_minions or []

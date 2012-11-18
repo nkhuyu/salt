@@ -285,8 +285,11 @@ def parse_opts():
     parser.add_option('--sysinfo',
             default=False,
             action='store_true',
-            help='Print some system information.'
-    )
+            help='Print some system information.')
+    parser.add_option('--no-colors',
+            default=False,
+            action='store_true',
+            help='Disable colour printing.')
 
     coverage_group = optparse.OptionGroup(
         parser,
