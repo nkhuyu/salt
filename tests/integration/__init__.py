@@ -972,17 +972,23 @@ class VagrantTestDaemon(TestDaemon):
             run_destructive=True,
             no_coverage_report=True,
             verbose=self.opts.verbosity,
-            name=(':'.join(self.opts.name) if self.opts.name else None),
-            #unit=True,
-            #shell=True,
-            #module=True,
-            #states=True,
             screen_width=width,
             screen_height=height,
             cwd=os.getcwd()
         )
         if self.opts.xmlout:
             run_tests_kwargs['xml'] = True
+
+        if self.opts.vagrant_same_tests:
+            run_tests_kwargs.update(
+                module=self.opts.module,
+                state=self.opts.state,
+                client=self.opts.client,
+                shell=self.opts.shell,
+                runner=self.opts.runner,
+                unit=self.opts.unit,
+                name=(':'.join(self.opts.name) if self.opts.name else None),
+            )
 
         run_tests_arg = [
             '{0}={1}'.format(k, v) for (k, v) in run_tests_kwargs.iteritems()
