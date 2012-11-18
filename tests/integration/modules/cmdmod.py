@@ -1,4 +1,8 @@
+# Import python libs
 import os
+import pwd
+
+# Import salt libs
 import integration
 
 
@@ -10,12 +14,28 @@ class CMDModuleTest(integration.ModuleCase):
         '''
         cmd.run
         '''
-        shell = os.environ['SHELL']
-        self.assertTrue(self.run_function('cmd.run', ['echo $SHELL']))
-        self.assertEqual(
-                self.run_function('cmd.run',
-                    ['echo $SHELL', 'shell={0}'.format(shell)]).rstrip(),
-                shell)
+        #shell = os.environ['SHELL']
+        # When running tests without a login(remotely using salt on vagrant
+        # machines, for example), there's no shell environment variable set.
+        #
+        # We can however use pwd to still get that information.
+        uinfo = pwd.getpwuid(os.getuid())
+        shell = uinfo.pw_shell
+
+        if not shell:
+            self.skipTest('Failed to get the current user\'s SHELL')
+
+        data = self.run_function('cmd.run', ['echo $SHELL'])
+        if os.environ.get('VAGRANT_RUNTESTS', '0') == '0':
+            # This will be tested if not being run using runtests custom module
+            # inside a vagrant machine because the environment will be cleaned
+            # up.
+            self.assertEqual(data.strip(), shell)
+
+        data = self.run_function(
+            'cmd.run', ['echo $SHELL', 'shell={0}'.format(shell)]
+        )
+        self.assertEqual(data.rstrip(), shell)
 
     def test_stdout(self):
         '''
@@ -102,11 +122,18 @@ sys.stdout.write('cheese')
         '''
         cmd.run with quoted command
         '''
+        # When running tests without a login(remotely using salt on vagrant
+        # machines, for example), we can't get os.getlogin()
+        #
+        # We can however use pwd to still get that information.
+        runas = pwd.getpwuid(os.getuid()).pw_name
+
         cmd = '''echo 'SELECT * FROM foo WHERE bar="baz"' '''
         expected_result = 'SELECT * FROM foo WHERE bar="baz"'
-        result = self.run_function('cmd.run_stdout', [cmd],
-                                   runas=os.getlogin()).strip()
-        self.assertEqual(result, expected_result)
+
+        result = self.run_function('cmd.run_stdout', [cmd], runas=runas)
+
+        self.assertEqual(result.strip(), expected_result)
 
 
 if __name__ == '__main__':
