@@ -11,6 +11,7 @@ the deployment of states over groups of servers.
 #
 # Import Python libs
 import sys
+import os
 
 # Import Salt libs
 import salt.client
@@ -24,19 +25,26 @@ class OverState(object):
     '''
     Manage sls file calls over multiple systems
     '''
-    def __init__(self, opts, env='base'):
+    def __init__(self, opts, env='base', overstate=None):
         self.opts = opts
         self.env = env
-        self.over = self.__read_over()
-        self.local = salt.client.LocalClient(self.opts)
+        self.over = self.__read_over(overstate)
+        self.local = salt.client.LocalClient(self.opts['conf_file'])
         self.over_run = {}
 
-    def __read_over(self):
+    def __read_over(self, overstate):
         '''
         Read in the overstate file
         '''
         if self.env not in self.opts['file_roots']:
             return {}
+        if overstate:
+            with salt.utils.fopen(overstate) as fp_:
+                try:
+                    # TODO Use render system
+                    return self.__sort_stages(yaml.load(fp_))
+                except Exception:
+                    return {}
         for root in self.opts['file_roots'][self.env]:
             fn_ = os.path.join(
                     root,
@@ -70,17 +78,39 @@ class OverState(object):
         raw = self.local.cmd(match, 'test.ping', expr_form='compound')
         return raw.keys()
 
+    def _check_result(self, running):
+        '''
+        Check the total return value of the run and determine if the running
+        dict has any issues
+        '''
+        if not isinstance(running, dict):
+            return False
+        if not running:
+            return False
+        for host in running:
+            if not 'ret' in running[host]:
+                return False
+            for tag, ret in running[host]['ret'].items():
+                if not 'result' in ret:
+                    return False
+                if ret['result'] is False:
+                    return False
+        return True
+
     def call_stage(self, name, stage):
         '''
         Check if a stage has any requisites and run them first
         '''
         errors = []
+        fun = 'state.highstate'
+        arg = ()
         if not 'match' in stage:
             errors.append('No "match" argument in stage.')
-        if not 'sls' in stage:
-            errors.append('No "sls" argument in stage')
         if errors:
             return errors
+        if 'sls' in stage:
+            fun = 'state.sls'
+            arg = (','.join(stage['sls']), self.env)
         if 'require' in stage:
             for req in stage['require']:
                 if req in self.over_run:
@@ -93,13 +123,12 @@ class OverState(object):
                 else:
                     self.call_stage(self.over[req])
         ret = {}
-        tgt = self._statge_list(stage['match'])
-        arg = (','.join(stage['sls']), self.env)
+        tgt = self._stage_list(stage['match'])
         for minion in self.local.cmd_iter(
                 tgt,
-                'state.sls',
+                fun,
                 arg,
-                expr_form='compound'):
+                expr_form='list'):
             ret.update(minion)
         self.over_run[name] = ret
 
