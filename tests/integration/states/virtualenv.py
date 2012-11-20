@@ -44,6 +44,9 @@ class VirtualenvTest(integration.ModuleCase,
             statinfo = self.run_function('file.stats', [venv_dir])
             self.assertEqual(statinfo['user'], uinfo['name'])
             self.assertEqual(statinfo['uid'], uinfo['uid'])
+        except AssertionError:
+            shutil.copytree(venv_dir, venv_dir + '.bak')
+            raise
         finally:
             if os.path.isdir(venv_dir):
                 shutil.rmtree(venv_dir)

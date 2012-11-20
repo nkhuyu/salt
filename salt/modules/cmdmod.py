@@ -83,6 +83,8 @@ def _chugid(runas):
                     os.getuid(), uinfo.pw_uid, err
                 )
             )
+    # Move to the user's home directory
+    os.chdir(uinfo.pw_dir)
 
 
 def _run(cmd,

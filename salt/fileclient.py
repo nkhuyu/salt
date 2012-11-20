@@ -90,7 +90,11 @@ class Client(object):
             path
             )
         destdir = os.path.dirname(dest)
-        cumask = os.umask(63)
+        # In order to have pip requirements files cached and yet, be able to
+        # run pip as another user other than root, for example, we need that
+        # user to have at least execute permissions on the directories leading
+        # to the cached requirements file.
+        cumask = os.umask(0066)  # rwx--x--x
         if not os.path.isdir(destdir):
             os.makedirs(destdir)
         yield dest
