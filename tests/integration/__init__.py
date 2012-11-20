@@ -562,9 +562,7 @@ class ShellCase(TestCase):
         cmd = '{0} {1} {2} {3}'.format(ppath, PYEXEC, path, arg_str)
 
         if catch_stderr:
-            process = subprocess.Popen(
-                cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
+            process = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
             if sys.version_info[0:2] < (2, 7):
                 # On python 2.6, the subprocess'es communicate() method uses
                 # select which, is limited by the OS to 1024 file descriptors
@@ -594,10 +592,11 @@ class ShellCase(TestCase):
                 except OSError, err:
                     # process already terminated
                     pass
+                if sys.version_info < (2, 7):
+                    import gc
+                    gc.collect()
 
-        process = subprocess.Popen(
-            cmd, shell=True, stdout=subprocess.PIPE
-        )
+        process = Popen(cmd, shell=True, stdout=PIPE)
         data = process.communicate()
         process.stdout.close()
 
