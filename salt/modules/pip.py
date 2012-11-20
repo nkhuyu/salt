@@ -298,7 +298,6 @@ def install(pkgs=None,
 
         cmd = '{cmd} {opts} '.format(cmd=cmd, opts=opts)
 
-    logger.warn('RUNAS: {0},  CWD: {1}  CMD: {2}'.format(runas, cwd, cmd))
     try:
         result = __salt__['cmd.run_all'](cmd, runas=runas, cwd=cwd)
     finally:
