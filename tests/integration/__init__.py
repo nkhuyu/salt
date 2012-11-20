@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import time
 from datetime import datetime, timedelta
+from subprocess import PIPE, Popen
 try:
     import pwd
 except ImportError:
@@ -31,17 +32,6 @@ try:
     PNUM = width
 except:
     PNUM = 70
-
-if sys.version_info >= (2, 7):
-    from subprocess import PIPE, Popen
-    print('Using regular subprocess')
-else:
-    # Don't do import py27_subprocess as subprocess so within the remaining of
-    # salt's source, whenever subprocess is imported, the proper one is used,
-    # even in under python 2.6
-    from py27_subprocess import PIPE, Popen
-    print('Using copied 2.7 subprocess')
-
 
 INTEGRATION_TEST_DIR = os.path.dirname(
     os.path.normpath(os.path.abspath(__file__))
@@ -609,6 +599,9 @@ class ShellCase(TestCase):
             except OSError, err:
                 # process already terminated
                 pass
+            if sys.version_info < (2, 7):
+                import gc
+                gc.collect()
 
     def run_salt(self, arg_str):
         '''
