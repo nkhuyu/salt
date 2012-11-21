@@ -558,7 +558,7 @@ class VagrantTestDaemon(TestDaemon):
         self.__sdist_salt_source_process.start()
 
     def __sdist_salt_source_bg(self, sdist_evt):
-        popen = subprocess.Popen(' '.join([
+        popen = Popen(' '.join([
                 'sleep 1;',
                 #sys.executable,
                 'python',
@@ -568,8 +568,8 @@ class VagrantTestDaemon(TestDaemon):
             cwd=CODE_DIR,
             shell=True,
             #bufsize=-1,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stdout=PIPE,
+            stderr=PIPE
         )
 
         while True:
@@ -591,7 +591,7 @@ class VagrantTestDaemon(TestDaemon):
 
         os.chdir(CODE_DIR)
 
-        popen = subprocess.Popen(' '.join([
+        popen = Popen(' '.join([
                 'sleep 1;',
                 #sys.executable,
                 'python',
@@ -603,8 +603,8 @@ class VagrantTestDaemon(TestDaemon):
             cwd=CODE_DIR,
             shell=True,
             #bufsize=-1,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stdout=PIPE,
+            stderr=PIPE
         )
 
         while True:
@@ -658,9 +658,9 @@ class VagrantTestDaemon(TestDaemon):
             else:
                 # Let's check if we need to source .rvmrc
                 try:
-                    popen = subprocess.Popen(
+                    popen = Popen(
                         ['vagrant', '--help'], cwd=machine_path,
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                        stdout=PIPE, stderr=PIPE
                     )
                     popen.wait()
                     self.__rvmrc_source = popen.returncode > 0
@@ -675,9 +675,7 @@ class VagrantTestDaemon(TestDaemon):
             cmd = 'source .rvmrc && {0}'.format(cmd)
             executable = '/bin/bash'
 
-        popen = subprocess.Popen(
-            cmd, cwd=machine_path, shell=True, executable=executable
-        )
+        popen = Popen(cmd, cwd=machine_path, shell=True, executable=executable)
         popen.wait()
         if popen.returncode > 0:
             raise VagrantMachineException()
@@ -1146,9 +1144,7 @@ class VagrantTestDaemon(TestDaemon):
             cmd = 'source .rvmrc && {0}'.format(cmd)
             executable = '/bin/bash'
 
-        popen = subprocess.Popen(
-            cmd, cwd=machine_path, shell=True, executable=executable
-        )
+        popen = Popen(cmd, cwd=machine_path, shell=True, executable=executable)
         popen.wait()
         if popen.returncode > 0:
             raise VagrantMachineException()
