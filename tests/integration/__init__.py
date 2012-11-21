@@ -1444,3 +1444,25 @@ class QueryRunningMinionsMixIn(object):
                     if running is True
                 ])
         return self.__running_minions or []
+
+
+class SaltReturnAssertsMixIn(object):
+
+    def __assertReturn(self, ret, which_case):
+        try:
+            if which_case is True:
+                self.assertTrue(ret['result'])
+            else:
+                self.assertFalse(ret['result'])
+        except AssertionError:
+            raise AssertionError(
+                '{result} is not {0}. Salt Comment:\n{comment}'.format(
+                    which_case, **ret
+                )
+            )
+
+    def assertSaltTrueReturn(self, ret):
+        self.__assertReturn(ret, True)
+
+    def assertSaltFalseReturn(self, ret):
+        self.__assertReturn(ret, False)
