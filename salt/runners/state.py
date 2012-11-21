@@ -12,8 +12,17 @@ def over(env='base', os_fn=None):
     over a group of systems
     '''
     overstate = salt.overstate.OverState(__opts__, env, os_fn)
-    overstate.stages()
-    salt.output.display_output(overstate.over_run, 'pprint', opts=__opts__)
+    for stage in overstate.stages_iter():
+        if isinstance(stage, dict):
+            # This is highstate data
+            for key, val in stage.items():
+                salt.output.display_output(
+                        {key: val},
+                        'highstate',
+                        opts=__opts__)
+        elif isinstance(stage, list):
+            # This is a stage
+            salt.output.display_output(stage, 'overstatestage', opts=__opts__)
     return overstate.over_run
 
 def show_stages(env='base', os_fn=None):
@@ -21,5 +30,8 @@ def show_stages(env='base', os_fn=None):
     Display the stage data to be executed
     '''
     overstate = salt.overstate.OverState(__opts__, env, os_fn)
-    salt.output.display_output(overstate.over, 'pprint', opts=__opts__)
+    salt.output.display_output(
+            overstate.over,
+            'overstatestage',
+            opts=__opts__)
     return overstate.over

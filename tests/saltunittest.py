@@ -11,6 +11,7 @@ test from here
 import os
 import sys
 import logging
+from functools import wraps
 
 # support python < 2.7 via unittest2
 if sys.version_info[0:2] < (2, 7):
@@ -69,6 +70,7 @@ class TestCase(OTestCase):
 
 
 def destructiveTest(func):
+    @wraps(func)
     def wrap(cls):
         if os.environ.get('DESTRUCTIVE_TESTS', 'False').lower() == 'false':
             cls.skipTest('Destructive tests are disabled')
