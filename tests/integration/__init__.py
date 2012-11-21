@@ -1446,19 +1446,41 @@ class SaltReturnAssertsMixIn(object):
 
     def __assertReturn(self, ret, which_case):
         try:
-            if which_case is True:
-                self.assertTrue(ret['result'])
-            else:
-                self.assertFalse(ret['result'])
+            self.assertTrue(isinstance(ret, dict))
         except AssertionError:
             raise AssertionError(
-                '{result} is not {0}. Salt Comment:\n{comment}'.format(
-                    which_case, **ret
+                '{0} is not dict. Salt returned: {1}'.format(
+                    type(ret), ret
                 )
             )
+
+        try:
+            self.assertNotEqual(ret, {})
+        except AssertionError:
+            raise AssertionError(
+                '{} is equal to {}. Salt returned an empty dictionary.'
+            )
+
+        for part in ret.itervalues():
+            try:
+                if which_case is True:
+                    self.assertTrue(part['result'])
+                elif which_case is False:
+                    self.assertFalse(part['result'])
+                elif which_case is None:
+                    self.assertIsNone(part['result'])
+            except AssertionError:
+                raise AssertionError(
+                    '{result} is not {0}. Salt Comment:\n{comment}'.format(
+                        which_case, **part
+                    )
+                )
 
     def assertSaltTrueReturn(self, ret):
         self.__assertReturn(ret, True)
 
     def assertSaltFalseReturn(self, ret):
         self.__assertReturn(ret, False)
+
+    def assertSaltNoneReturn(self, ret):
+        self.__assertReturn(ret, None)
