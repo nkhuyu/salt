@@ -149,15 +149,17 @@ def run_integration_tests(opts):
                   'setting -> {0}'.format(err))
             print('Please issue the following command on your console:')
             print('  ulimit -n {0}'.format(REQUIRED_OPEN_FILES))
-            sys.exit(1)
-        finally:
             print('~' * PNUM)
+            sys.exit(1)
 
-    print_header('Setting up Salt daemons to execute tests', top=False)
     status = []
     if not any([opts.client, opts.module, opts.runner, opts.shell,
                 opts.state, opts.name, opts.vagrant_test]):
         return status
+
+    print_header(
+        'Setting up Salt daemons to execute tests', sep='=', centered=True
+    )
 
     if opts.vagrant_test:
         # Switch the tests daemon if we'll test within vagrant machines too
@@ -166,6 +168,9 @@ def run_integration_tests(opts):
         from integration import TestDaemon
 
     with TestDaemon(opts) as test_daemon:
+        print_header(
+            'Salt daemons set up. Running tests', sep='=', centered=True
+        )
         if opts.name:
             for name in opts.name:
                 results = run_suite(opts, '', name)
