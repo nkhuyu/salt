@@ -19,6 +19,14 @@ class ManageTest(integration.ShellCase):
         jobs.active
         '''
         ret = self.run_run_plus('jobs.active')
+
+        if ret['fun']:
+            # We have some running jobs, make sure we remove the remote
+            # runtests job from the list
+            for job_id, job_data in ret['fun'].copy().iteritems():
+                if job_data['Function'] == 'runtests.run_tests':
+                    ret['fun'].pop(job_id)
+
         self.assertEqual(ret['fun'], {})
         self.assertEqual(ret['out'], ['{}'])
 
