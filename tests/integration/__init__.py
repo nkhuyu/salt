@@ -61,10 +61,6 @@ MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
 COVERAGE_FILE = os.path.join(tempfile.gettempdir(), '.coverage')
 TESTING_SDIST_DIR = os.path.join(TMP, 'salt-source')
 
-MINIONS_CONNECT_TIMEOUT = MINIONS_SYNC_TIMEOUT = 60
-# Max time, in seconds, that creating an sdist can take
-SDIST_COMPRESS_TIMEOUT = 10
-
 try:
     import console
     width, height = console.getTerminalSize()
@@ -142,6 +138,7 @@ class TestDaemon(object):
     '''
     Set up the master and minion daemons, and run related cases
     '''
+    MINIONS_CONNECT_TIMEOUT = MINIONS_SYNC_TIMEOUT = 60
 
     def __init__(self, opts):
         self.opts = opts
@@ -282,33 +279,9 @@ class TestDaemon(object):
             os.path.join(INTEGRATION_TEST_DIR, 'files', 'conf', 'master')
         )
 
-        evt_minions_connect = multiprocessing.Event()
-        evt_minions_sync = multiprocessing.Event()
-        minion_targets = set(['minion', 'sub_minion'])
-
-        # Wait for minions to connect back
-        wait_minions_connection = multiprocessing.Process(
-            target=self.__wait_for_minions_connections,
-            args=(evt_minions_connect, minion_targets)
-        )
-        wait_minions_connection.start()
-        if evt_minions_connect.wait(MINIONS_CONNECT_TIMEOUT) is False:
-            print('WARNING: Minions failed to connect back. Tests requiring '
-                  'them WILL fail')
-        wait_minions_connection.terminate()
-        del(evt_minions_connect, wait_minions_connection)
-
-        # Wait for minions to "sync_all"
-        sync_minions = multiprocessing.Process(
-            target=self.__sync_minions,
-            args=(evt_minions_sync, minion_targets)
-        )
-        sync_minions.start()
-        if evt_minions_sync.wait(MINIONS_SYNC_TIMEOUT) is False:
-            print('WARNING: Minions failed to sync. Tests requiring the '
-                  'testing `runtests_helper` module WILL fail')
-        sync_minions.terminate()
-        del(evt_minions_sync, sync_minions)
+        self.minion_targets = set(['minion', 'sub_minion'])
+        self.pre_setup_minions()
+        self.setup_minions()
 
         if self.opts.sysinfo:
             from salt import version
@@ -322,9 +295,12 @@ class TestDaemon(object):
             import pprint
             pprint.pprint(grains['minion'])
 
-        print_header('', sep='=', inline=True)
+        #print_header('', sep='=', inline=True)
 
-        return self
+        try:
+            return self
+        finally:
+            self.post_setup_minions()
 
     def __exit__(self, type, value, traceback):
         '''
@@ -339,8 +315,58 @@ class TestDaemon(object):
         self._clean()
 
     def enable_progress(self):
-        # overridden in the VagrantTestDaemon
-        pass
+        """
+        While running `VagrantTestDaemon` there's some informational `print`'s
+        which will look pretty bad if they're being printed while the local
+        tests are still running.
+
+        `VagrantTestDaemon` makes use of this method to set a signal which,
+        once set, will allow the information prints to be actually printed.
+        """
+
+    def pre_setup_minions(self):
+        """
+        `VagrantTestDaemon` will make use of this method for additional minion
+        setup's like starting the vagrant machines, etc...
+        """
+
+    def setup_minions(self):
+        # Wait for minions to connect back
+        if self.minion_targets.difference(['minion', 'sub_minion']):
+            # In this case, we're waiting for more than the local minions, let
+            # us allow more time for connections to happen.
+            self.MINIONS_CONNECT_TIMEOUT = self.MINIONS_SYNC_TIMEOUT = 5 * 60
+
+        wait_minion_connections = multiprocessing.Process(
+            target=self.wait_for_minion_connections,
+            args=(self.minion_targets, self.MINIONS_CONNECT_TIMEOUT)
+        )
+        wait_minion_connections.start()
+        wait_minion_connections.join()
+        wait_minion_connections.terminate()
+        if wait_minion_connections.exitcode > 0:
+            return False
+
+        del(wait_minion_connections)
+
+        # Wait for minions to "sync_all"
+        sync_minions = multiprocessing.Process(
+            target=self.sync_minions,
+            args=(self.minion_targets, self.MINIONS_SYNC_TIMEOUT)
+        )
+        sync_minions.start()
+        sync_minions.join()
+        if sync_minions.exitcode > 0:
+            return False
+        sync_minions.terminate()
+        del(sync_minions)
+        return True
+
+    def post_setup_minions(self):
+        """
+        `VagrantTestDaemon` will make use of this method to trigger the remote
+        runtests to run.
+        """
 
     def _enter_mockbin(self):
         path = os.environ.get('PATH', '')
@@ -374,17 +400,26 @@ class TestDaemon(object):
             shutil.rmtree(TMP)
 
     def wait_for_jid(self, targets, jid, timeout=120, evt=None):
+        time.sleep(1)  # Allow some time for minions to accept jobs
         now = datetime.now()
         expire = now + timedelta(seconds=timeout)
+        job_finished = False
         while now <= expire:
             running = self.__client_job_running(targets, jid)
             if evt is None or (evt is not None and evt.is_set()):
                 sys.stdout.write('\r' + ' ' * PNUM + '\r')
-            if not running:
+            if not running and job_finished is False:
+                # Let's not have false positives and wait one more seconds
+                job_finished = True
+            elif not running and job_finished is True:
                 #if evt is None or (evt is not None and evt.is_set()):
                 #    print
                 return True
-            if evt is None or (evt is not None and evt.is_set()):
+            elif running and job_finished is True:
+                job_finished = False
+
+            if ((evt is None or (evt is not None and evt.is_set())) and
+                                                        job_finished is False):
                 sys.stdout.write(
                     '    * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
                         '{0}'.format(expire - now).rsplit('.', 1)[0],
@@ -398,7 +433,8 @@ class TestDaemon(object):
         else:
             if evt is None or (evt is not None and evt.is_set()):
                 sys.stdout.write(
-                    '\n    * ERROR: Failed to get information back\n'
+                    '\n    {RED_BOLD}*{ENDC} ERROR: Failed to get information '
+                    'back\n'.format(**self.colors)
                 )
                 sys.stdout.flush()
         return False
@@ -411,43 +447,76 @@ class TestDaemon(object):
             k for (k, v) in running.iteritems() if v and v[0]['jid'] == jid
         ]
 
-    def __wait_for_minions_connections(self, evt, targets):
-        print_header(
-            'Waiting at most {0} secs for local minions to connect '
-            'back and another {1} secs for them to '
-            '"saltutil.sync_all()"'.format(
-                MINIONS_CONNECT_TIMEOUT, MINIONS_SYNC_TIMEOUT
-            ), sep='=', centered=True
+    def wait_for_minion_connections(self, targets, timeout):
+        sys.stdout.write(
+            '  {LIGHT_BLUE}*{ENDC} Waiting at most {0} for minions({1}) to '
+            'connect back\n'.format(
+                (timeout > 60 and
+                 timedelta(seconds=timeout) or
+                 '{0} secs'.format(timeout)),
+                ', '.join(targets),
+                **self.colors
+            )
         )
-        targets = set(['minion', 'sub_minion'])
+        sys.stdout.flush()
         expected_connections = set(targets)
-        while True:
-            # If enough time passes, a timeout will be triggered by
-            # multiprocessing.Event, so, we can have this while True here
-            targets = self.client.cmd('*', 'test.ping')
-            for target in targets:
+        now = datetime.now()
+        expire = now + timedelta(seconds=timeout)
+        while now <= expire:
+            sys.stdout.write('\r' + ' ' * PNUM + '\r')
+            sys.stdout.write(
+                '  * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
+                    '{0}'.format(expire - now).rsplit('.', 1)[0],
+                    ', '.join(expected_connections),
+                    **self.colors
+                )
+            )
+            sys.stdout.flush()
+
+            responses = self.client.cmd(
+                ','.join(expected_connections), 'test.ping', expr_form='list',
+            )
+            for target in responses:
                 if target not in expected_connections:
                     # Someone(minion) else "listening"?
+                    print target
                     continue
                 expected_connections.remove(target)
-                print('  * {0} minion connected'.format(target))
+                sys.stdout.write('\r' + ' ' * PNUM + '\r')
+                sys.stdout.write(
+                    '    {LIGHT_GREEN}*{ENDC} {0} connected.\n'.format(
+                        target, **self.colors
+                    )
+                )
+                sys.stdout.flush()
+
             if not expected_connections:
                 # All expected connections have connected
-                break
+                #sys.stdout.write('\n')
+                #sys.stdout.flush()
+                #print_header('=', sep='=', inline=True)
+                return
+                #raise SystemExit()
+
             time.sleep(1)
-        evt.set()
+            now = datetime.now()
+        else:
+            print(
+                '\n  {RED_BOLD}*{ENDC} WARNING: Minions failed to connect '
+                'back. Tests requiring them WILL fail'.format(**self.colors)
+            )
+            print_header('=', sep='=', inline=True)
+            raise SystemExit()
 
-    def __client_job_running(self, targets, jid):
-        running = self.client.cmd(
-            ','.join(targets), 'saltutil.running', expr_form='list'
-        )
-        return [
-            k for (k, v) in running.iteritems() if v and v[0]['jid'] == jid
-        ]
-
-    def __sync_minions(self, evt, targets):
+    def sync_minions(self, targets, timeout=120):
         # Let's sync all connected minions
-        print('  * Syncing local minion\'s dynamic data(saltutil.sync_all)')
+        print(
+            '  {LIGHT_BLUE}*{ENDC} Syncing minion\'s dynamic '
+            'data(saltutil.sync_all)'.format(
+                ', '.join(targets),
+                **self.colors
+            )
+        )
         syncing = set(targets)
         jid_info = self.client.run_job(
             ','.join(targets), 'saltutil.sync_all',
@@ -455,22 +524,33 @@ class TestDaemon(object):
             timeout=9999999999999999,
         )
 
-        if self.wait_for_jid(targets, jid_info['jid']) is False:
-            raise Exception('foo')
+        if self.wait_for_jid(targets, jid_info['jid'], timeout) is False:
+            print(
+                '  {RED_BOLD}*{ENDC} WARNING: Minions failed to sync. Tests '
+                'requiring custom modules WILL fail'.format(**self.colors)
+            )
+            raise SystemExit()
 
         while syncing:
             rdata = self.client.get_returns(jid_info['jid'], syncing, 1)
             if rdata:
                 for idx, (name, output) in enumerate(rdata.iteritems()):
-                    print('    * Synced {0}: {1}'.format(name, output))
+                    print(
+                        '    {LIGHT_GREEN}*{ENDC} Synced {0}: modules=>{1}  '
+                        'states=>{2}  grains=>{3}  renderers=>{4}  '
+                        'returners=>{5}'.format(
+                            name, *output, **self.colors
+                        )
+                    )
                     # Synced!
                     try:
                         syncing.remove(name)
                     except KeyError:
-                        print('    * {0} already synced???  {1}'.format(
-                            name, output
-                        ))
-        evt.set()
+                        print(
+                            '    {RED_BOLD}*{ENDC} {0} already synced???  '
+                            '{1}'.format(name, output, **self.colors)
+                        )
+        return True
 
 
 class VagrantMachineException(Exception):
@@ -480,6 +560,9 @@ class VagrantMachineException(Exception):
 
 
 class VagrantTestDaemon(TestDaemon):
+    # Max time, in seconds, that creating an sdist can take
+    SDIST_COMPRESS_TIMEOUT = 10
+
     def __init__(self, opts):
         super(VagrantTestDaemon, self).__init__(opts)
         # Setup some events
@@ -502,29 +585,6 @@ class VagrantTestDaemon(TestDaemon):
                 continue
             self.__machines[dirname] = vg_path
 
-    def __enter__(self):
-        # Run the __enter__ code from TestDaemon
-        ret = super(VagrantTestDaemon, self).__enter__()
-        # Wait for the vagrant stuff to start before returning the code
-        # execution back
-        # Start the vagrant machines
-        self.__sdist_salt_source()
-        if self.__evt_sdist.wait(SDIST_COMPRESS_TIMEOUT) is False:
-            # Usually on the 2nd run it creates the compressed source file
-            self.__sdist_salt_source_process.terminate()
-            self.__sdist_salt_source()
-            if self.__evt_sdist.wait(SDIST_COMPRESS_TIMEOUT) is False:
-                sys.stdout.write('\r' + ' ' * PNUM + '\r')
-                print(
-                    'WARNING: Failed to create an sdist. Won\'t start vagrant '
-                    'machines.'
-                )
-                self.__sdist_salt_source_process.terminate()
-                return ret
-        self.__start_machines()
-        self.__evt_started.wait()
-        return ret
-
     def __exit__(self, type, value, traceback):
         # Let's handle the vagrant stuff before running the TestDaemon.__exit__
         # code. Wait for the tests to complete.
@@ -541,9 +601,53 @@ class VagrantTestDaemon(TestDaemon):
         print
         print_header('', sep='=', inline=True)
         if not self.__evt_finished.is_set():
-            sys.stdout.write('  * Waiting for test results from ...')
+            sys.stdout.write(
+                '  {LIGHT_BLUE}*{ENDC} Waiting for remote test results'.format(
+                    **self.colors
+                )
+            )
             sys.stdout.flush()
         self.__evt_progress.set()
+
+    def pre_setup_minions(self):
+        super(VagrantTestDaemon, self).pre_setup_minions()
+        self.__sdist_salt_source()
+        if self.__evt_sdist.wait(self.SDIST_COMPRESS_TIMEOUT) is False:
+            # Usually on the 2nd run it creates the compressed source file
+            self.__sdist_salt_source_process.terminate()
+            self.__sdist_salt_source()
+            if self.__evt_sdist.wait(self.SDIST_COMPRESS_TIMEOUT) is False:
+                sys.stdout.write('\r' + ' ' * PNUM + '\r')
+                print(
+                    '  {RED_BOLD}*{ENDC} WARNING: Failed to create an '
+                    'sdist. Won\'t start vagrant machines.'.format(
+                        **self.colors
+                    )
+                )
+                self.__sdist_salt_source_process.terminate()
+                return
+        self.__start_machines()
+        self.minion_targets.update(self.__machines.keys())
+
+    def setup_minions(self):
+        super(VagrantTestDaemon, self).setup_minions()
+        self.__evt_sdist.wait()  # Should not be necessary
+        self.__setup_minions_process = multiprocessing.Process(
+            target=self.__setup_minions_target,
+            args=(self.__evt_started, self.__evt_finished)
+        )
+        self.__setup_minions_process.start()
+        self.__evt_started.wait()
+        self.__setup_minions_process.terminate()
+        del(self.__setup_minions_process)
+
+    def post_setup_minions(self):
+        super(VagrantTestDaemon, self).post_setup_minions()
+        self.__tests_process = multiprocessing.Process(
+            target=self.__run_tests_target,
+            args=(self.__evt_finished, self.__evt_progress)
+        )
+        self.__tests_process.start()
 
     def __sdist_salt_source(self):
         #self.__sdist_salt_source_process = threading.Thread(
@@ -552,7 +656,8 @@ class VagrantTestDaemon(TestDaemon):
         )
         sys.stdout.write('\r' + ' ' * PNUM + '\r')
         sys.stdout.write(
-            ' * Creating source distribution to supply to vagrant machines '
+            '  {LIGHT_BLUE}*{ENDC} Creating source distribution to supply to '
+            'vagrant machines '.format(**self.colors)
         )
         sys.stdout.flush()
         self.__sdist_salt_source_process.start()
@@ -629,15 +734,23 @@ class VagrantTestDaemon(TestDaemon):
         os.rename(os.path.join(TESTING_SDIST_DIR, sname), dname_path)
         # We're done, set the signal
         sys.stdout.write('\r' + ' ' * PNUM + '\r')
-        print('   * Compressed salt\'s source: {0}'.format(dname_path))
+        print(
+            '    {LIGHT_GREEN}*{ENDC} Compressed salt\'s source: {0}'.format(
+                dname_path, **self.colors
+            )
+        )
         sdist_evt.set()
 
     def __start_machines(self):
+        print('  {LIGHT_BLUE}*{ENDC} Starting vagrant machine(s)'.format(
+            **self.colors
+        ))
+
         for machine, vg_path in self.__machines.copy().iteritems():
             header = '  Starting {0} Machine  '.format(machine)
             vagrant_skip = os.path.join(vg_path, 'Vagrantfile.skip')
             if os.path.exists(vagrant_skip):
-                header += '~  SKIPPED  '
+                header += '~  SKIPPED  '.format(**self.colors)
             print_header(header, centered=True, inline=True)
             if os.path.exists(vagrant_skip):
                 self.__machines.pop(machine)
@@ -645,11 +758,14 @@ class VagrantTestDaemon(TestDaemon):
             try:
                 self.__start_machine(vg_path)
             except VagrantMachineException:
-                print('  * Failed to start machine: {0}'.format(machine))
+                print(
+                    '  {RED_BOLD}*{ENDC} Failed to start machine: {0}'.format(
+                        machine, **self.colors
+                    )
+                )
                 self.__machines.pop(machine)
             print_header('~', inline=True)
             time.sleep(0.2)
-        self.__run_tests()
 
     def __start_machine(self, machine_path):
         if self.__rvmrc_source is None:
@@ -680,296 +796,190 @@ class VagrantTestDaemon(TestDaemon):
         if popen.returncode > 0:
             raise VagrantMachineException()
 
-    def __run_tests(self):
-        self.__evt_sdist.wait()
-        self.__tests_process = multiprocessing.Process(
-            target=self.__run_tests_target,
-            args=(self.__evt_started, self.__evt_finished, self.__evt_progress)
-        )
-        self.__tests_process.start()
-
-    def __run_tests_target(self, start_evt, finish_evt, progress_evt):
-        sleep = 60
-        print_header(
-            'Waiting at most {0} secs for remote minions to connect '
-            'back'.format(sleep), sep='=', centered=True
-        )
-        expected_connection = set(self.__machines.keys())
-        while sleep > 0:
-            # Let's get the minions who are responding back
-            targets = filter(
-                lambda x: x not in ('minion', 'sub_minion'),
-                self.client.cmd('*', 'test.ping')
+    def __run_step(self, step, sls, targets, timeout):
+        print(
+            '  {LIGHT_BLUE}*{ENDC} Running step {0!r} on the minion\'s'.format(
+                step, **self.colors
             )
-            for target in targets:
-                if target not in expected_connection:
-                    continue
-                print('  * {0} minion connected'.format(target))
-                expected_connection.remove(target)
+        )
 
-            if not expected_connection:
-                time.sleep(1)
-                break
-            time.sleep(1)
-            sleep -= 1
-        else:
-            if expected_connection:
-                print(
-                    '  * Failed to get a connection back from: {0}'.format(
-                        ', '.join(expected_connection)
-                    )
-                )
-
-        def check_available_targets():
-            if not targets:
-                print_header(
-                    'There aren\'t any minions running to run remote tests '
-                    'against', sep='=', centered=True
-                )
-
-                start_evt.set()
-                finish_evt.set()
-                return False
-            return True
-
-        if not check_available_targets():
-            return
-
-        targets = set(targets)
-
-        # Let's sync all connected minions
-        print('  * Syncing minion\'s dynamic data(saltutil.sync_all)')
-        syncing = set(targets)
+        step_targets = set(targets)
         jid_info = self.client.run_job(
-            ','.join(targets), 'saltutil.sync_all',
+            ','.join(targets), 'state.sls', arg=['mods={0}'.format(sls)],
             expr_form='list',
             timeout=9999999999999999,
         )
 
-        if self.wait_for_jid(targets, jid_info['jid'], 5*60) is False:
-            raise Exception('foo')
-
-        while syncing:
-            rdata = self.client.get_returns(jid_info['jid'], syncing, 10)
-            if rdata:
-                for idx, (name, output) in enumerate(rdata.iteritems()):
-                    if name in ('minion', 'sub_minion'):
-                        continue
-                    print('    * Synced {0}: {1}'.format(name, output))
-                    # Synced!
-                    try:
-                        syncing.remove(name)
-                    except KeyError:
-                        print('    * {0} already synced???  {1}'.format(
-                            name, output
-                        ))
-
-        # Let's install required packages
-        # I need to do this as a separate step because I need to use a
-        # grain which depends on a package. Having it all in the same state
-        # file would create circular dependencies.
-        print('  * Installing runtests dependencies on the minion\'s')
-        runtests_pkgs_sls = set(targets)
-        jid_info = self.client.run_job(
-            ','.join(targets), 'state.sls', arg=['mods=runtests.pkgs'],
-            expr_form='list',
-            timeout=9999999999999999,
-        )
-
-        if self.wait_for_jid(targets, jid_info['jid'], 10*60) is False:
-            raise Exception('foo')
-
-        while runtests_pkgs_sls:
-            rdata = self.client.get_returns(
-                jid_info['jid'], runtests_pkgs_sls, 10
+        if self.wait_for_jid(targets, jid_info['jid'], timeout) is False:
+            print(
+                '    {BOLD_RED}*{ENDC} Failed to run step {0!r}'.format(
+                    step, **self.colors
+                )
             )
-            if rdata:
-                for idx, (name, output) in enumerate(rdata.iteritems()):
-                    if name in ('minion', 'sub_minion'):
-                        # These should never appear here
-                        continue
+            return False
 
+        attemps = 3
+        while step_targets:
+            rdata = self.client.get_returns(jid_info['jid'], step_targets, 10)
+            if not rdata:
+                attemps -= 1
+                if attemps < 0:
                     print(
-                        '    * Minion {0} seems to have completed installing '
-                        'salt\'s package dependencies .'.format(name)
-                    )
-                    try:
-                        failed = [
-                            s for s in output.values() if s['result'] is False
-                        ]
-                        if failed:
-                            print(
-                                '      * Failed to install salt\'s '
-                                'dependencies on minion {0}. '
-                                'Failing: {1}'.format(
-                                    name,
-                                    '; '.join([s['comment'] for s in failed])
-                                )
-                            )
-                            print(
-                                '      * Removing {0} from overall '
-                                'targets'.format(name)
-                            )
-                            try:
-                                targets.remove(name)
-                            except KeyError:
-                                print(
-                                    '      * Failed to remove {0} from overall'
-                                    'targets. Previously removed!?!?!?'.format(
-                                        name
-                                    )
-                                )
-                            break
-                        try:
-                            print('    * Removing {0} from salt\'s packages '
-                                  'dependencies install targets.'.format(name))
-                            runtests_pkgs_sls.remove(name)
-                        except KeyError:
-                            print('      * Failed to remove {0} from salt\'s '
-                                  'packages install targets. Previously '
-                                  'removed!?!?!?'.format(name))
-                            print output
-                    except AttributeError:
-                        print(
-                            '    * Error installing salt\'s package '
-                            'dependencies on {0}: {1}'.format(name, output)
+                        '    {BOLD_RED}*{ENDC} Failed to get data back while '
+                        'running step {0!r}'.format(
+                            step, **self.colors
                         )
+                    )
+                    return False
+                continue
 
-        if not check_available_targets():
-            return
+            for name, output in rdata.items():
+                if name in ('minion', 'sub_minion'):
+                    # These should never appear here
+                    continue
 
-        # Let's run the setup states
-        print('  * Setting up the salt source on the minion\'s')
-        runtests_setup_sls = set(targets)
-        jid_info = self.client.run_job(
-            ','.join(targets), 'state.sls', arg=['mods=runtests.setup'],
-            expr_form='list',
-            timeout=9999999999999999,
-        )
+                if name not in step_targets:
+                    # Previous error which is already skipped? Handle next!
+                    continue
 
-        if self.wait_for_jid(targets, jid_info['jid'], 10*60) is False:
-            raise Exception('foo')
+                if not isinstance(output, dict):
+                    # This is an error:
+                    print(
+                        '    {RED_BOLD}*{ENDC} Error running step {0!r} '
+                        'on {1}: {2}'.format(
+                            step, name, '\n'.join(output), **self.colors
+                        )
+                    )
+                    if name in targets:
+                        print(
+                            '        {LIGHT_GREEN}*{ENDC} Removing {0} from '
+                            'overall targets'.format(name, **self.colors)
+                        )
+                        targets.remove(name)
 
-        while runtests_setup_sls:
-            rdata = self.client.get_returns(
-                jid_info['jid'], runtests_setup_sls, 10
+                    if not targets:
+                        # Every minion failed
+                        print(
+                            '    {RED_BOLD}*{ENDC} All minions failed to '
+                            'run {0!r}'.format(
+                                step, **self.colors
+                            )
+                        )
+                        return False
+
+                    if name in step_targets:
+                        print(
+                            '      {LIGHT_GREEN}*{ENDC} Removing minion {0} '
+                            'from step {0!r}'.format(
+                                name, step, **self.colors
+                            )
+                        )
+                        step_targets.remove(name)
+                    continue
+
+                print(
+                    '    {LIGHT_GREEN}*{ENDC} Minion {0} seems to '
+                    'have completed step {1!r}'.format(
+                        name, step, **self.colors
+                    )
+                )
+
+                try:
+                    failed = [
+                        s for s in output.values() if s['result'] is False
+                    ]
+                    if failed:
+                        print(
+                            '      {RED_BOLD}*{ENDC} Failed to run step '
+                            '{0!r} on minion {1}({3}). '
+                            'Failing: {2}'.format(
+                                step,
+                                name,
+                                '; '.join([s['comment'] for s in failed]),
+                                step_targets,
+                                **self.colors
+                            )
+                        )
+                        if name in targets:
+                            print(
+                                '        {LIGHT_GREEN}*{ENDC} Removing {0} '
+                                'from overall targets'.format(
+                                    name, **self.colors
+                                )
+                            )
+                            targets.remove(name)
+                        if name in step_targets:
+                            print(
+                                '      {LIGHT_GREEN}*{ENDC} Removing minion '
+                                '{0} from step {0!r}'.format(
+                                    name, step, **self.colors
+                                )
+                            )
+                        step_targets.remove(name)
+                except AttributeError:
+                    print(
+                        '    {RED_BOLD}*****{ENDC} Error running step '
+                        '{0!r} on {0}: {1}'.format(
+                            name, output, **self.colors
+                        )
+                    )
+                # code execution reached here, minion completed step
+                if name in step_targets:
+                    print(
+                        '      {LIGHT_GREEN}*{ENDC} Removing minion {0} from '
+                        'step {0!r}'.format(
+                            name, step, **self.colors
+                        )
+                    )
+                    step_targets.remove(name)
+        return True
+
+    def __check_available_targets(self, start_evt, finish_evt):
+        targets = set(self.__machines.keys())
+        if not targets:
+            print_header(
+                'There aren\'t any minions running to run remote tests '
+                'against', sep='=', centered=True
             )
-            if rdata:
-                for idx, (name, output) in enumerate(rdata.iteritems()):
-                    if name in ('minion', 'sub_minion'):
-                        # These should never appear here
-                        continue
 
-                    print('    * Minion {0} seems to have completed setting '
-                          'up salt\'s source.'.format(name))
-                    try:
-                        failed = [
-                            s for s in output.values() if s['result'] is False
-                        ]
-                        if failed:
-                            print(
-                                '      * Failed to setup salt\'s source on '
-                                'minion {0}. Failing: {1}'.format(
-                                    name,
-                                    '; '.join([s['comment'] for s in failed])
-                                )
-                            )
-                            print(
-                                '      * Removing {0} from overall '
-                                'targets'.format(name)
-                            )
-                            try:
-                                targets.remove(name)
-                            except KeyError:
-                                print(
-                                    '      * Failed to remove {0} from overall'
-                                    'targets. Previously removed!?!?!?'.format(
-                                        name
-                                    )
-                                )
-                            break
-                        try:
-                            print('    * Removing {0} from salt\'s source '
-                                  'setup targets.'.format(name))
-                            runtests_setup_sls.remove(name)
-                        except KeyError:
-                            print('      * Failed to remove {0} from salt\'s '
-                                  'source setup targets. Previously '
-                                  'removed!?!?!?'.format(name))
-                    except AttributeError:
-                        print('    * Error setting up salt\'s source on '
-                              '{0}: {1}'.format(name, output))
+            start_evt.set()
+            finish_evt.set()
+            return False
+        return True
 
-        if not check_available_targets():
-            return
-
-        # Let's run the setup states
-        print('  * Creating runtests virtualenv on the minion\'s')
-        runtests_sls = set(targets)
-        jid_info = self.client.run_job(
-            ','.join(targets), 'state.sls', arg=['mods=runtests'],
-            expr_form='list',
-            timeout=9999999999999999,
+    def __setup_minions_target(self, start_evt, finish_evt):
+        targets = set(self.__machines.keys())
+        # Install dependencies
+        self.__run_step(
+            'install dependencies', 'runtests.pkgs', targets, 10 * 60
         )
 
-        if self.wait_for_jid(targets, jid_info['jid'], 10*60) is False:
-            raise Exception('foo')
-
-        while runtests_sls:
-            rdata = self.client.get_returns(jid_info['jid'], runtests_sls, 10)
-            if rdata:
-                for idx, (name, output) in enumerate(rdata.iteritems()):
-                    if name in ('minion', 'sub_minion'):
-                        # These should never appear here
-                        continue
-
-                    print('  * Minion {0} seems to have completed setting up '
-                          'salt\'s virtualenv.'.format(name))
-                    try:
-                        failed = [
-                            s for s in output.values() if s['result'] is False
-                        ]
-                        if failed:
-                            print(
-                                '  * Failed to setup salt\'s virtualenv on '
-                                'minion {0}. Failing: {1}'.format(
-                                    name,
-                                    '; '.join([s['comment'] for s in failed])
-                                )
-                            )
-                            print(
-                                '    * Removing {0} from overall '
-                                'targets'.format(name)
-                            )
-                            try:
-                                targets.remove(name)
-                            except KeyError:
-                                print(
-                                    '    * Failed to remove {0} from overall'
-                                    'targets. Previously removed!?!?!?'.format(
-                                        name
-                                    )
-                                )
-                            break
-
-                        try:
-                            print('    * Removing {0} from salt\'s virtualenv '
-                                  'setup targets.'.format(name))
-                            runtests_sls.remove(name)
-                        except KeyError:
-                            print('    * Failed to remove {0} from salt\'s '
-                                  'virtualenv setup targets. Previously '
-                                  'removed!?!?!?'.format(name))
-                    except AttributeError:
-                        print('    * Error setting up salt\'s virtualenv on '
-                              '{0}: {1}'.format(name, output))
-
-        if not check_available_targets():
+        if not self.__check_available_targets(start_evt, finish_evt):
             return
 
-        print_header('=', sep='=', inline=True)
+        # Setup salt source
+        self.__run_step(
+            'setup salt\'s source', 'runtests.setup', targets, 10 * 60
+        )
+
+        if not self.__check_available_targets(start_evt, finish_evt):
+            return
+
+        # Create virtualenv
+        self.__run_step(
+            'create virtualenv', 'runtests', targets, 15 * 60
+        )
+
+        if not self.__check_available_targets(start_evt, finish_evt):
+            return
+
+        #print_header('=', sep='=', inline=True)
+
+        # Local tests can start
         start_evt.set()
 
+    def __run_tests_target(self, finish_evt, progress_evt):
+        targets = set(self.__machines.keys())
         # Now let's run the tests remotely
         running = set(targets)
         time.sleep(1)
@@ -1011,18 +1021,24 @@ class VagrantTestDaemon(TestDaemon):
             arg=run_tests_arg
         )
 
-        if self.wait_for_jid(targets, jid_info['jid'], 60*60, evt=progress_evt) is False:
-            raise Exception('foo')
+        if self.wait_for_jid(targets, jid_info['jid'], 45*60, evt=progress_evt) is False:
+            # Let's signal anyone waiting for the event that we're done
+            finish_evt.set()
+            raise SystemExit('Failed to runtests.....')
 
         data = {}
-        steps = 3
 
         while running:
             rdata = self.client.get_returns(jid_info['jid'], running, 1)
+            #import pprint
+            #print('\n\n{0}\n\n'.format(pprint.pformat(rdata)))
+            #print rdata.keys()
             if rdata:
-                for idx, (name, output) in enumerate(rdata.iteritems()):
+                #for idx, (name, output) in enumerate(rdata.iteritems()):
+                for idx, name in enumerate(rdata.keys()):
                     if name in ('minion', 'sub_minion'):
                         continue
+                    output = rdata[name]
                     # Got back the test results from the minion.
                     # It's no longer running tests
                     try:
@@ -1035,36 +1051,48 @@ class VagrantTestDaemon(TestDaemon):
                     if not isinstance(output, dict):
                         if '"runtests.run_tests" is not available' in output:
                             print(
-                                '\n  * The minion {0} is not able to run the '
-                                'test suite because the \'runtests\' module '
-                                'wasn\'t uploaded to it. Removing it from the '
-                                'testing targets.'.format(name)
+                                '\n  {RED_BOLD}*{ENDC} The minion {0} is not '
+                                'able to run the test suite because the '
+                                '\'runtests\' module wasn\'t uploaded to it. '
+                                'Removing it from the testing targets.'.format(
+                                    name, **self.colors
+                                )
                             )
                             targets.remove(name)
                         else:
                             print(
-                                '\n  * An error occurred on {0}: {1}'.format(
-                                    name, output
+                                '\n  {RED_BOLD}*{ENDC} An error occurred on '
+                                '{0}: {1}'.format(
+                                    name, output, **self.colors
                                 )
                             )
                         continue
 
                     print
-                    if idx + 1 % 2:
-                        print(self.colors['LIGHT_BLUE'])
+                    if idx % 2:
+                        rcolor = self.colors['LIGHT_BLUE']
+                    else:
+                        rcolor = self.colors['BROWN']
+
+                    print('{0}'.format(
+                        (output['retcode'] > 0 and
+                        '{RED_BOLD}' or '{LIGHT_GREEN}').format(**self.colors)
+                    ))
                     print_header(
                         '  {0} ~ Remote Test Results ~ {1}  '.format(
                             name,
-                            (output['retcode'] > 0 and 'FAILED' or 'PASSED')
+                            output['retcode'] > 0 and 'FAILED' or 'PASSED'
                         ), inline=True, centered=True
                     )
+                    print(rcolor)
+
                     if output['retcode'] > 0:
                         print(output['stderr'])
                     print(output['stdout'])
 
                     print_header('~', inline=True)
-                    if idx + 1 % 2:
-                        print(self.colors['ENDC'])
+                    #if idx + 1 % 2:
+                    print(self.colors['ENDC'])
 
             if not running:
                 # All remote tests have finished. Exit the loop
@@ -1072,22 +1100,28 @@ class VagrantTestDaemon(TestDaemon):
                 print_header('', sep='=', inline=True)
                 break
 
-            elif steps <= 0:
-                # We're still waiting for results from the remote vagrant
-                # minions running the test suite.
-                steps = 3
-                if progress_evt.is_set():
-                    sys.stdout.write('\r' + ' ' * PNUM + '\r')
-                    sys.stdout.write(
-                        '  * Waiting for test results from {0} '.format(
-                            ', '.join(running)
-                        )
-                    )
-            else:
-                steps -= 1
-                if progress_evt.is_set():
-                    sys.stdout.write('.')
-            sys.stdout.flush()
+            #elif steps <= 0:
+            #    # We're still waiting for results from the remote vagrant
+            #    # minions running the test suite.
+            #    steps = 3
+            #    if progress_evt.is_set():
+            #        sys.stdout.write('\r' + ' ' * PNUM + '\r')
+            #        sys.stdout.write(
+            #            '  * Waiting for test results from {0} '.format(
+            #                ', '.join(running)
+            #            )
+            #        )
+            #else:
+            #    steps -= 1
+            #    if progress_evt.is_set():
+            #        sys.stdout.write('.')
+            #sys.stdout.flush()
+
+        if self.opts.coverage is False:
+            # There's nothing else to do here.
+            # Let's signal anyone waiting for the event that we're done
+            finish_evt.set()
+            return
 
         # All finished, gather coverage data back from the vagrant minions
         coverage_data = self.client.cmd(
