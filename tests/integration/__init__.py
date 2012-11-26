@@ -412,8 +412,6 @@ class TestDaemon(object):
                 # Let's not have false positives and wait one more seconds
                 job_finished = True
             elif not running and job_finished is True:
-                #if evt is None or (evt is not None and evt.is_set()):
-                #    print
                 return True
             elif running and job_finished is True:
                 job_finished = False
@@ -421,7 +419,7 @@ class TestDaemon(object):
             if ((evt is None or (evt is not None and evt.is_set())) and
                                                         job_finished is False):
                 sys.stdout.write(
-                    '    * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
+                    '   * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
                         '{0}'.format(expire - now).rsplit('.', 1)[0],
                         ', '.join(running),
                         **self.colors
@@ -491,12 +489,7 @@ class TestDaemon(object):
                 sys.stdout.flush()
 
             if not expected_connections:
-                # All expected connections have connected
-                #sys.stdout.write('\n')
-                #sys.stdout.flush()
-                #print_header('=', sep='=', inline=True)
                 return
-                #raise SystemExit()
 
             time.sleep(1)
             now = datetime.now()
