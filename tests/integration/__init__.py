@@ -276,7 +276,7 @@ class TestDaemon(object):
             pprint.pprint(grains['minion'])
 
         print_header('', sep='=', inline=True)
-        self.ps_stats.start()
+        #self.ps_stats.start()
 
         try:
             return self

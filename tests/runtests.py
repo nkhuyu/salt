@@ -59,8 +59,8 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     if opts.xmlout:
         runner = xmlrunner.XMLTestRunner(output='test-reports').run(tests)
     else:
-        #runner = saltunittest.TextTestRunner(
-        runner = saltunittest.PymplerTextTestRunner(
+        runner = saltunittest.TextTestRunner(
+        #runner = saltunittest.PymplerTextTestRunner(
             verbosity=opts.verbosity
         ).run(tests)
         TEST_RESULTS.append((header, runner))
@@ -98,7 +98,7 @@ def run_integration_tests(opts):
             sys.exit(1)
         finally:
             print('~' * PNUM)
-            
+
     print('Stack size: {0}'.format(resource.getrlimit(resource.RLIMIT_STACK)))
     resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
     print('Stack size: {0}'.format(resource.getrlimit(resource.RLIMIT_STACK)))
