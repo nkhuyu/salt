@@ -39,13 +39,13 @@ except:
     PNUM = 70
 
 if sys.version_info >= (2, 7):
-    from subprocess import PIPE, Popen
+    from subprocess import PIPE, Popen, _active
     print('Using regular subprocess')
 else:
     # Don't do import py27_subprocess as subprocess so within the remaining of
     # salt's source, whenever subprocess is imported, the proper one is used,
     # even in under python 2.6
-    from py27_subprocess import PIPE, Popen
+    from py27_subprocess import PIPE, Popen, _active
     print('Using copied 2.7 subprocess')
 
 
@@ -698,11 +698,7 @@ class ShellCase(TestCase):
             except OSError, err:
                 # process already terminated
                 pass
-            print(
-                '\nActive processes: {0}\n'.format(
-                    len(subprocess._active)
-                )
-            )
+            print('\nActive processes: {0}\n'.format(len(_active)))
 
     def run_salt(self, arg_str):
         '''
