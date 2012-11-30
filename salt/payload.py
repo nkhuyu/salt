@@ -23,7 +23,7 @@ try:
     import msgpack
     # There is a serialization issue on ARM and potentially other platforms
     # for some msgpack bindings, check for it
-    if msgpack.loads(msgpack.dumps([1,2,3])) is None:
+    if msgpack.loads(msgpack.dumps([1, 2, 3])) is None:
         raise ImportError
 except ImportError:
     # Fall back to msgpack_pure
@@ -154,8 +154,6 @@ class SREQ(object):
             return self.serial.loads(self.socket.recv())
         finally:
             poller.unregister(self.socket)
-            self.socket.close(self.linger)
-            self.context.term()
 
     def send_auto(self, payload):
         '''
@@ -164,3 +162,10 @@ class SREQ(object):
         enc = payload.get('enc', 'clear')
         load = payload.get('load', {})
         return self.send(enc, load)
+
+    def __del__(self):
+        try:
+            self.socket.close()
+            self.context.term()
+        except:
+            pass
