@@ -292,7 +292,8 @@ class TestDaemon(object):
         self.master_process.terminate()
         self.syndic_process.terminate()
         self.smaster_process.terminate()
-        self.ps_stats.terminate()
+        if self.ps_stats.is_alive():
+            self.ps_stats.terminate()
         self._exit_mockbin()
         self._clean()
 
@@ -697,9 +698,6 @@ class ShellCase(TestCase):
             except OSError, err:
                 # process already terminated
                 pass
-            del(process, fdo, outfilepath, out)
-            if catch_stderr:
-                del(fde, errfilepath, err)
             print(
                 '\nActive processes: {0}\n'.format(
                     len(subprocess._active)
