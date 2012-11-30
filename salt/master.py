@@ -329,8 +329,8 @@ class Publisher(multiprocessing.Process):
         except KeyboardInterrupt:
             pub_sock.close()
             pull_sock.close()
-        finally:
-            context.term()
+        #finally:
+        #    context.term()
 
 
 class ReqServer(object):
@@ -382,7 +382,8 @@ class ReqServer(object):
                         continue
                     raise exc
         finally:
-            self.context.term()
+            pass
+            #self.context.term()
 
     def start_publisher(self):
         '''
@@ -458,8 +459,8 @@ class MWorker(multiprocessing.Process):
                     raise exc
         except KeyboardInterrupt:
             socket.close()
-        finally:
-            context.term()
+        #finally:
+        #    context.term()
 
     def _handle_payload(self, payload):
         '''
@@ -1074,7 +1075,7 @@ class AESFuncs(object):
                 return ret
         finally:
             pub_sock.close()
-            context.term()
+            #context.term()
 
     def run_func(self, func, load):
         '''
@@ -1664,4 +1665,4 @@ class ClearFuncs(object):
                              'minions': minions}}
         finally:
             pub_sock.close()
-            context.term()
+            #context.term()

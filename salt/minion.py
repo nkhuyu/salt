@@ -673,7 +673,7 @@ class Minion(object):
             epub_sock.close()
             epull_sock.close()
             socket.close()
-            context.term()
+            #context.term()
 
 
 class Syndic(salt.client.LocalClient, Minion):

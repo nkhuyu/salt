@@ -162,10 +162,10 @@ class SaltEvent(object):
                 self.push.close()
         except:
             pass
-        try:
-            self.context.term()
-        except:
-            pass
+        #try:
+        #    self.context.term()
+        #except:
+        #    pass
 
 
 class MasterEvent(SaltEvent):

@@ -166,6 +166,6 @@ class SREQ(object):
     def __del__(self):
         try:
             self.socket.close()
-            self.context.term()
+            #self.context.term()
         except:
             pass
