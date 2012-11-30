@@ -11,6 +11,7 @@ test from here
 import os
 import sys
 import logging
+import threading
 
 # support python < 2.7 via unittest2
 if sys.version_info[0:2] < (2, 7):
@@ -57,37 +58,45 @@ def destructiveTest(func):
 
 from pympler import tracker
 MTRACKER = tracker.SummaryTracker()
-MTRACKER.print_diff(); print
+MTRACKER.print_diff()
+print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
 
 class PymplerResultClass(TextTestResult):
     def startTest(self, test):
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
         return super(PymplerResultClass, self).startTest(test)
 
     def addSuccess(self, test):
         super(PymplerResultClass, self).addSuccess(test)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
     def addError(self, test, err):
         super(PymplerResultClass, self).addError(test, err)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
     def addFailure(self, test, err):
         super(PymplerResultClass, self).addFailure(test, err)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
     def addSkip(self, test, reason):
         super(PymplerResultClass, self).addSkip(test, reason)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
     def addExpectedFailure(self, test, err):
         super(TextTestResult, self).addExpectedFailure(test, err)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
     def addUnexpectedSuccess(self, test):
         super(TextTestResult, self).addUnexpectedSuccess(test)
-        MTRACKER.print_diff(); print
+        MTRACKER.print_diff()
+        print 'Active Thread Count: {0}\n'.format(threading.active_count())
 
 
 class PymplerTextTestRunner(TextTestRunner):
