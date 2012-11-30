@@ -12,7 +12,7 @@ __version__ = '.'.join(map(str, __version_info__))
 # If we can get a version from Git use that instead, otherwise carry on
 try:
     import os
-    import subprocess
+    import subprocess32 as subprocess
     from salt.utils import which
 
     git = which('git')

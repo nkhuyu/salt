@@ -33,15 +33,17 @@ try:
 except:
     PNUM = 70
 
-if sys.version_info >= (2, 7):
-    from subprocess import PIPE, Popen
-    print('Using regular subprocess')
-else:
-    # Don't do import py27_subprocess as subprocess so within the remaining of
-    # salt's source, whenever subprocess is imported, the proper one is used,
-    # even in under python 2.6
-    from py27_subprocess import PIPE, Popen
-    print('Using copied 2.7 subprocess')
+#if sys.version_info >= (2, 7):
+#    from subprocess import PIPE, Popen
+#    print('Using regular subprocess')
+#else:
+#    # Don't do import py27_subprocess as subprocess so within the remaining of
+#    # salt's source, whenever subprocess is imported, the proper one is used,
+#    # even in under python 2.6
+#    from py27_subprocess import PIPE, Popen
+#    print('Using copied 2.7 subprocess')
+
+from subprocess32 import PIPE, Popen
 
 
 INTEGRATION_TEST_DIR = os.path.dirname(

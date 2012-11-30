@@ -8,7 +8,7 @@ import hashlib
 import os
 import shutil
 import string
-import subprocess
+import subprocess32 as subprocess
 
 # Import third-party libs
 import yaml

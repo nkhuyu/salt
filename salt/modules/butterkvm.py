@@ -5,7 +5,7 @@ Specialized routines used by the butter cloud component
 import copy
 import os
 import shutil
-import subprocess
+import subprocess32 as subprocess
 import tempfile
 
 

@@ -18,7 +18,7 @@ import datetime
 import pwd
 import getpass
 import resource
-import subprocess
+import subprocess32 as subprocess
 import multiprocessing
 
 # Import zeromq

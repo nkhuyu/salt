@@ -20,7 +20,7 @@ information that is used by a Salt top file.
 '''
 
 # Import python libs
-import subprocess
+import subprocess32 as subprocess
 
 # Import third party libs
 import yaml
@@ -64,4 +64,4 @@ def top(**kwargs):
             ret[env] = ndata['classes']
         else:
             return ret
-    return ret 
+    return ret

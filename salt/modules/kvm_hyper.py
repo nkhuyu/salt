@@ -13,7 +13,7 @@ interact with kvm on behalf of the salt-virt interface
 import os
 import shutil
 import string
-import subprocess
+import subprocess32 as subprocess
 from xml.dom import minidom
 
 # Import libvirt

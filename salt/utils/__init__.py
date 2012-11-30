@@ -18,7 +18,7 @@ import datetime
 import tempfile
 import shlex
 import shutil
-import subprocess
+import subprocess32 as subprocess
 import time
 import platform
 from calendar import month_abbr as months
@@ -771,7 +771,7 @@ def mkstemp(*args, **kwargs):
 
 def clean_kwargs(**kwargs):
     '''
-    Clean out the __pub* keys from the kwargs dict passed into the execution 
+    Clean out the __pub* keys from the kwargs dict passed into the execution
     module functions. The __pub* keys are useful for tracking what was used to
     invoke the function call, but they may not be desierable to have if
     passing the kwargs forward wholesale.

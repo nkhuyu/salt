@@ -10,7 +10,7 @@ Work with virtual machines managed by libvirt
 import os
 import re
 import shutil
-import subprocess
+import subprocess32 as subprocess
 from xml.dom import minidom
 
 # Import Third Party Libs

@@ -8,7 +8,7 @@ access to the master root execution access to all salt minions
 import logging
 import os
 import shutil
-import subprocess
+import subprocess32 as subprocess
 import sys
 from functools import partial
 
