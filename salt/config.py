@@ -80,6 +80,7 @@ def load_config(opts, path, env_var):
     if not os.path.isfile(path):
         template = '{0}.template'.format(path)
         if os.path.isfile(template):
+            import salt.utils  # Need to re-import, need to find out why
             with salt.utils.fopen(path, 'w') as out:
                 with salt.utils.fopen(template, 'r') as f:
                     f.readline()  # skip first line
@@ -156,12 +157,12 @@ def minion_config(path, check_dns=True):
             'master_finger': '',
             'user': 'root',
             'root_dir': '/',
-            'pki_dir': '/etc/salt/pki',
+            'pki_dir': '/etc/salt/pki/minion',
             'id': socket.getfqdn(),
-            'cachedir': '/var/cache/salt',
+            'cachedir': '/var/cache/salt/minion',
             'cache_jobs': False,
             'conf_file': path,
-            'sock_dir': '/var/run/salt',
+            'sock_dir': '/var/run/salt/minion',
             'backup_mode': '',
             'renderer': 'yaml_jinja',
             'failhard': False,
@@ -214,7 +215,9 @@ def minion_config(path, check_dns=True):
             'update_url': False,
             'update_restart_services': [],
             'retry_dns': 30,
+            'recon_max': 30000,
             }
+
 
     if len(opts['sock_dir']) > len(opts['cachedir']) + 10:
         opts['sock_dir'] = os.path.join(opts['cachedir'], '.salt-unix')
@@ -285,13 +288,13 @@ def master_config(path):
             'publish_port': '4505',
             'user': 'root',
             'worker_threads': 5,
-            'sock_dir': '/var/run/salt',
+            'sock_dir': '/var/run/salt/master',
             'ret_port': '4506',
             'timeout': 5,
             'keep_jobs': 24,
             'root_dir': '/',
-            'pki_dir': '/etc/salt/pki',
-            'cachedir': '/var/cache/salt',
+            'pki_dir': '/etc/salt/pki/master',
+            'cachedir': '/var/cache/salt/master',
             'file_roots': {
                 'base': ['/srv/salt'],
                 },
@@ -314,7 +317,6 @@ def master_config(path):
             'max_open_files': 100000,
             'hash_type': 'md5',
             'conf_file': path,
-            'pub_refresh': False,
             'open_mode': False,
             'auto_accept': False,
             'renderer': 'yaml_jinja',
@@ -337,9 +339,12 @@ def master_config(path):
             'cluster_masters': [],
             'cluster_mode': 'paranoid',
             'range_server': 'range:80',
+            'reactors': [],
             'serial': 'msgpack',
             'state_verbose': True,
             'state_output': 'full',
+            'search': '',
+            'search_index_interval': 3600,
             'nodegroups': {},
             'cython_enable': False,
             'key_logfile': '/var/log/salt/key',

@@ -27,7 +27,7 @@ sls_encoding = 'utf-8'  # this one has no BOM.
 sls_encoder = codecs.getencoder(sls_encoding)
 
 
-def compile_template(template, renderers, default, env='', sls=''):
+def compile_template(template, renderers, default, env='', sls='', **kwargs):
     '''
     Take the path to a template and return the high data structure
     derived from the template.
@@ -54,10 +54,10 @@ def compile_template(template, renderers, default, env='', sls=''):
 
     input_data = StringIO(input_data)
     for render, argline in render_pipe:
+        render_kwargs = dict(renderers=renderers, tmplpath=template)
+        render_kwargs.update(kwargs)
         if argline:
-            render_kwargs = dict(renderers=renderers, argline=argline)
-        else:
-            render_kwargs = dict(renderers=renderers)
+            render_kwargs['argline'] = argline
         ret = render(input_data, env, sls, **render_kwargs)
         if ret is None:
             # The file is empty or is being written elsewhere

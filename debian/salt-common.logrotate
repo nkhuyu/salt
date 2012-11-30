@@ -1,5 +1,3 @@
-/var/log/salt/master
-/var/log/salt/minion
 /var/log/salt/key
 /var/log/salt/*.log
 {

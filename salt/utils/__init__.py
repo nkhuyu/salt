@@ -23,6 +23,12 @@ import time
 import platform
 from calendar import month_abbr as months
 
+try:
+    import fcntl
+except ImportError:
+    # fcntl is not available on windows
+    fcntl = None
+
 # Import Salt libs
 import salt.minion
 import salt.payload
@@ -735,6 +741,9 @@ def fopen(*args, **kwargs):
     survive into the new program after exec.
     '''
     fhandle = open(*args, **kwargs)
+    if fcntl is None:
+        # fcntl is not available on windows
+        return fhandle
     try:
         FD_CLOEXEC = fcntl.FD_CLOEXEC
     except AttributeError:
@@ -758,3 +767,17 @@ def mkstemp(*args, **kwargs):
     os.close(fd_)
     del(fd_)
     return fpath
+
+
+def clean_kwargs(**kwargs):
+    '''
+    Clean out the __pub* keys from the kwargs dict passed into the execution 
+    module functions. The __pub* keys are useful for tracking what was used to
+    invoke the function call, but they may not be desierable to have if
+    passing the kwargs forward wholesale.
+    '''
+    ret = {}
+    for key, val in kwargs.items():
+        if not key.startswith('__pub'):
+            ret[key] = val
+    return ret

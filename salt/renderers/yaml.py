@@ -7,7 +7,7 @@ import warnings
 
 # Import Salt libs
 from salt.utils.yaml import CustomLoader, load
-
+from salt.exceptions import SaltRenderError
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,6 @@ except ImportError:
         from ordereddict import OrderedDict
     except ImportError:
         HAS_ORDERED_DICT = False
-
 
 
 def get_yaml_loader(argline):
@@ -46,8 +45,9 @@ Options:
                 return CustomLoader(*args, dictclass=OrderedDict)
             return Loader
         else:
-            log.warn('OrderedDict not available! '
-                     'NOT enabling implicit state ordering for YAML!')
+            raise SaltRenderError(
+                    'OrderedDict not available! It is required when using '
+                    'the ordered option(-o) with yaml renderer.')
     return CustomLoader
 
 

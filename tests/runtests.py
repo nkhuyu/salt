@@ -6,6 +6,7 @@ Discover all instances of unittest.TestCase in this directory.
 # Import python libs
 import sys
 import os
+import re
 import time
 import logging
 import optparse
@@ -237,6 +238,10 @@ def parse_opts():
             action='store_true',
             help='Print some system information.'
     )
+    parser.add_option('--no-colors',
+            default=False,
+            action='store_true',
+            help='Disable colour printing.')
 
     options, _ = parser.parse_args()
 
@@ -251,7 +256,8 @@ def parse_opts():
         )
     elif options.coverage:
         coverage_version = tuple(
-            [int(part) for part in coverage.__version__.split('.')]
+            [int(part) for part in
+             re.search(r'([0-9.]+)', coverage.__version__).group(0).split('.')]
         )
         if coverage_version < (3, 5, 3):
             # Should we just print the error instead of exiting?
@@ -295,7 +301,7 @@ def parse_opts():
 
     # With greater verbosity we can also log to the console
     if options.verbosity > 2:
-        consolehandler = logging.StreamHandler(stream=sys.stderr)
+        consolehandler = logging.StreamHandler(sys.stderr)
         consolehandler.setLevel(logging.INFO)       # -vv
         consolehandler.setFormatter(formatter)
         if options.verbosity > 3:

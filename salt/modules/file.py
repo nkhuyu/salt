@@ -84,6 +84,16 @@ def gid_to_group(gid):
         salt '*' file.gid_to_group 0
     '''
     try:
+        gid = int(gid)
+    except ValueError:
+        # This is not an integer, maybe it's already the group name?
+        gid = group_to_gid(gid)
+
+    if gid == '':
+        # Don't even bother to feed it to grp
+        return ''
+
+    try:
         return grp.getgrgid(gid).gr_name
     except KeyError:
         return ''
@@ -602,7 +612,13 @@ def patch(originalfile, patchfile, options='', dry_run=False):
 
     .. versionadded:: 0.10.4
     '''
-    dry_run_opt = ' --dry-run' if dry_run else ''
+    if dry_run:
+        if __grains__['kernel'] in ('FreeBSD', 'OpenBSD'):
+            dry_run_opt = ' -C'
+        else:
+            dry_run_opt = ' --dry-run'
+    else:
+        dry_run_opt = ''
     cmd = 'patch {0}{1} {2} {3}'.format(
         options, dry_run_opt, originalfile, patchfile)
     return __salt__['cmd.run_all'](cmd)
@@ -789,16 +805,15 @@ def remove(path):
     if not os.path.isabs(path):
         raise SaltInvocationError('File path must be absolute.')
 
-    if os.path.exists(path):
-        try:
-            if os.path.isfile(path) or os.path.islink(path):
-                os.remove(path)
-                return True
-            elif os.path.isdir(path):
-                shutil.rmtree(path)
-                return True
-        except (OSError, IOError):
-            raise CommandExecutionError('Could not remove "{0}"'.format(path))
+    try:
+        if os.path.isfile(path) or os.path.islink(path):
+            os.remove(path)
+            return True
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
+            return True
+    except (OSError, IOError):
+        raise CommandExecutionError('Could not remove "{0}"'.format(path))
     return False
 
 
@@ -1139,9 +1154,11 @@ def check_managed(
             **kwargs
             )
     if comment:
+        __clean_tmp(sfn)
         return False, comment
     changes = check_file_meta(name, sfn, source, source_sum, user,
                               group, mode, env)
+    __clean_tmp(sfn)
     if changes:
         comment = 'The following values are set to be changed:\n'
         for key, val in changes.items():

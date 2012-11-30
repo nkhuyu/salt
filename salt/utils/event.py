@@ -14,16 +14,22 @@ Manage events
 #
 # Import Python libs
 import os
+import fnmatch
+import glob
 import hashlib
 import errno
 import logging
 import multiprocessing
+from multiprocessing import Process
 
 # Import Third Party libs
 import zmq
 
 # Import Salt libs
 import salt.payload
+import salt.loader
+import salt.state
+from salt._compat import string_types
 
 log = logging.getLogger(__name__)
 
@@ -121,11 +127,17 @@ class SaltEvent(object):
         '''
         Creates a generator that continuously listens for events
         '''
-        while True:
-            data = self.get_event(tag=tag, full=full)
-            if data is None:
-                continue
-            yield data
+        try:
+            while True:
+                data = self.get_event(tag=tag, full=full)
+                if data is None:
+                    continue
+                yield data
+        except KeyboardInterrupt:
+            if self.cpub:
+                self.sub.close()
+            if self.cpush:
+                self.push.close()
 
     def fire_event(self, data, tag=''):
         '''
@@ -155,8 +167,7 @@ class MinionEvent(SaltEvent):
     def __init__(self, **kwargs):
         super(MinionEvent, self).__init__('minion', **kwargs)
 
-
-class EventPublisher(multiprocessing.Process):
+class EventPublisher(Process):
     '''
     The interface that takes master events and republishes them out to anyone
     who wants to listen
@@ -213,3 +224,128 @@ class EventPublisher(multiprocessing.Process):
         except KeyboardInterrupt:
             epub_sock.close()
             epull_sock.close()
+
+
+class Reactor(multiprocessing.Process, salt.state.Compiler):
+    '''
+    Read in the reactor configuration variable and compare it to events
+    processed on the master.
+    The reactor has the capability to execute pre-programmed executions
+    as reactions to events
+    '''
+    def __init__(self, opts):
+        multiprocessing.Process.__init__(self)
+        salt.state.Compiler.__init__(self, opts)
+        self.event = SaltEvent('master', self.opts['sock_dir'])
+        self.wrap = ReactWrap(self.opts)
+
+    def render_reaction(self, glob_ref, tag, data):
+        '''
+        Execute the render system against a single reaction file and return
+        the data structure
+        '''
+        react = {}
+        for fn_ in glob.glob(glob_ref):
+            react.update(self.render_template(
+                    fn_,
+                    tag=tag,
+                    data=data))
+        return react
+
+    def list_reactors(self, tag):
+        '''
+        Take in the tag from an event and return a list of the reactors to
+        process
+        '''
+        log.debug('Gathering rections for tag {0}'.format(tag))
+        reactors = []
+        for ropt in self.opts['reactor']:
+            if not isinstance(ropt, dict):
+                continue
+            if not len(ropt) == 1:
+                continue
+            key = ropt.keys()[0]
+            val = ropt[key]
+            if fnmatch.fnmatch(tag, key):
+                if isinstance(val, string_types):
+                    reactors.append(val)
+                elif isinstance(val, list):
+                    reactors.extend(val)
+        return reactors
+
+    def reactions(self, tag, data, reactors):
+        '''
+        Render a list of reactor files and returns a reaction struct
+        '''
+        log.debug('Compiling reactions for tag {0}'.format(tag))
+        high = {}
+        chunks = []
+        for fn_ in reactors:
+            high.update(self.render_reaction(fn_, tag, data))
+        if high:
+            errors = self.verify_high(high)
+            if errors:
+                return errors
+            chunks = self.order_chunks(self.compile_high_data(high))
+        return chunks
+
+    def call_reactions(self, chunks):
+        '''
+        Execute the reaction state
+        '''
+        for chunk in chunks:
+            self.wrap.run(chunk)
+
+    def run(self):
+        '''
+        Enter into the server loop
+        '''
+        for data in self.event.iter_events(full=True):
+            reactors = self.list_reactors(data['tag'])
+            if not reactors:
+                continue
+            chunks = self.reactions(data['tag'], data['data'], reactors)
+            if chunks:
+                self.call_reactions(chunks)
+
+
+class ReactWrap(object):
+    '''
+    Create a wrapper that executes low data for the reaction system
+    '''
+    def __init__(self, opts):
+        self.opts = opts
+
+    def run(self, low):
+        '''
+        Execute the specified function in the specified state by passing the
+        LowData
+        '''
+        l_fun = getattr(self, low['state'])
+        f_call = salt.utils.format_call(l_fun, low)
+
+        ret = l_fun(*f_call.get('args', ()), **f_call.get('kwargs', {}))
+        return ret
+
+    def cmd(self, *args, **kwargs):
+        '''
+        Wrap LocalClient for running :ref:`execution modules <all-salt.modules>`
+        '''
+        local = salt.client.LocalClient(self.opts['conf_file'])
+        return local.cmd(*args, **kwargs)
+
+    def runner(self, fun, **kwargs):
+        '''
+        Wrap RunnerClient for executing :ref:`runner modules <all-salt.runners>`
+        '''
+        runner = salt.runner.RunnerClient(self.opts)
+        return runner.low(fun, kwargs)
+
+    def wheel(self, fun, **kwargs):
+        '''
+        Wrap Wheel to enable executing :ref:`wheel modules <all-salt.wheel>`
+        '''
+        kwargs['fun'] = fun
+        wheel = salt.wheel.Wheel(self.opts)
+        return wheel.master_call(**kwargs)
+

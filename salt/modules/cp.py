@@ -150,6 +150,20 @@ def get_url(path, dest, env='base'):
     return client.get_url(path, dest, False, env)
 
 
+def get_file_str(path, env='base'):
+    '''
+    Return the contents of a file from a url
+
+    CLI Example::
+
+        salt '*' cp.get_file_str salt://my/file
+    '''
+    fn_ = cache_file(path, env)
+    with salt.utils.fopen(fn_, 'r') as fp_:
+        data = fp_.read()
+    return data
+
+
 def cache_file(path, env='base'):
     '''
     Used to cache a single file in the local salt-master file cache.
@@ -159,7 +173,11 @@ def cache_file(path, env='base'):
         salt '*' cp.cache_file salt://path/to/file
     '''
     client = salt.fileclient.get_file_client(__opts__)
-    return client.cache_file(path, env)
+    result = client.cache_file(path, env)
+    if not result:
+        log.error('Unable to cache file "{0}" from env '
+                  '"{1}".'.format(path,env))
+    return result
 
 
 def cache_files(paths, env='base'):

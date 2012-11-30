@@ -41,6 +41,7 @@ import salt.runner
 import salt.auth
 import salt.wheel
 import salt.minion
+import salt.search
 import salt.utils
 import salt.utils.atomicfile
 import salt.utils.event
@@ -163,26 +164,31 @@ class Master(SMaster):
         '''
         Clean out the old jobs
         '''
-        if self.opts['keep_jobs'] == 0:
-            return
         jid_root = os.path.join(self.opts['cachedir'], 'jobs')
+        search = salt.search.Search(self.opts)
+        last = time.time()
         while True:
-            cur = "{0:%Y%m%d%H}".format(datetime.datetime.now())
+            if self.opts['keep_jobs'] != 0:
+                cur = "{0:%Y%m%d%H}".format(datetime.datetime.now())
 
-            for top in os.listdir(jid_root):
-                t_path = os.path.join(jid_root, top)
-                for final in os.listdir(t_path):
-                    f_path = os.path.join(t_path, final)
-                    jid_file = os.path.join(f_path, 'jid')
-                    if not os.path.isfile(jid_file):
-                        continue
-                    with salt.utils.fopen(jid_file, 'r') as fn_:
-                        jid = fn_.read()
-                    if len(jid) < 18:
-                        # Invalid jid, scrub the dir
-                        shutil.rmtree(f_path)
-                    elif int(cur) - int(jid[:10]) > self.opts['keep_jobs']:
-                        shutil.rmtree(f_path)
+                for top in os.listdir(jid_root):
+                    t_path = os.path.join(jid_root, top)
+                    for final in os.listdir(t_path):
+                        f_path = os.path.join(t_path, final)
+                        jid_file = os.path.join(f_path, 'jid')
+                        if not os.path.isfile(jid_file):
+                            continue
+                        with salt.utils.fopen(jid_file, 'r') as fn_:
+                            jid = fn_.read()
+                        if len(jid) < 18:
+                            # Invalid jid, scrub the dir
+                            shutil.rmtree(f_path)
+                        elif int(cur) - int(jid[:10]) > self.opts['keep_jobs']:
+                            shutil.rmtree(f_path)
+            if self.opts.get('search'):
+                now = time.time()
+                if now - last > self.opts['search_index_interval']:
+                    search.index()
             try:
                 time.sleep(60)
             except KeyboardInterrupt:
@@ -240,6 +246,7 @@ class Master(SMaster):
                 self.master_key)
         reqserv.start_publisher()
         reqserv.start_event_publisher()
+        reqserv.start_reactor()
 
         def sigterm_clean(signum, frame):
             '''
@@ -387,6 +394,14 @@ class ReqServer(object):
         # Start the publisher
         self.eventpublisher = salt.utils.event.EventPublisher(self.opts)
         self.eventpublisher.start()
+
+    def start_reactor(self):
+        '''
+        Start the reactor, but only if the reactor interface is configured
+        '''
+        if self.opts.get('reactor'):
+            self.reactor = salt.utils.event.Reactor(self.opts)
+            self.reactor.start()
 
     def run(self):
         '''
@@ -1003,7 +1018,8 @@ class AESFuncs(object):
             try:
                 timeout = int(clear_load['tmo'])
             except ValueError:
-                msg = 'Failed to parse timeout value: {0}'.format(clear_load['tmo'])
+                msg = 'Failed to parse timeout value: {0}'.format(
+                        clear_load['tmo'])
                 log.warn(msg)
                 return {}
         if 'tgt_type' in clear_load:
@@ -1236,7 +1252,8 @@ class ClearFuncs(object):
                     if re.match(line, keyid):
                         return True
                 except re.error:
-                    message = "{0} is not a valid regular expression, ignoring line in {1}"
+                    message = ('{0} is not a valid regular expression, '
+                               'ignoring line in {1}')
                     log.warn(message.format(line, autosign_file))
                     continue
 
