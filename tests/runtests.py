@@ -98,6 +98,10 @@ def run_integration_tests(opts):
             sys.exit(1)
         finally:
             print('~' * PNUM)
+            
+    print('Stack size: {0}'.format(resource.getrlimit(resource.RLIMIT_STACK)))
+    resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+    print('Stack size: {0}'.format(resource.getrlimit(resource.RLIMIT_STACK)))
 
     print_header('Setting up Salt daemons to execute tests', top=False)
     status = []
