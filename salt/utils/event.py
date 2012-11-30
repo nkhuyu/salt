@@ -152,7 +152,20 @@ class SaltEvent(object):
         return True
 
     def __del__(self):
-        self.context.term()
+        try:
+            if self.cpub:
+                self.sub.close()
+        except:
+            pass
+        try:
+            if self.cpush:
+                self.push.close()
+        except:
+            pass
+        try:
+            self.context.term()
+        except:
+            pass
 
 
 class MasterEvent(SaltEvent):
