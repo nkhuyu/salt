@@ -491,13 +491,21 @@ class TestDaemon(object):
             rdata = self.client.get_returns(jid_info['jid'], syncing, 1)
             if rdata:
                 for name, output in rdata.iteritems():
-                    print(
-                        '   {LIGHT_GREEN}*{ENDC} Synced {0}: modules=>{1} '
-                        'states=>{2} grains=>{3} renderers=>{4} '
-                        'returners=>{5}'.format(
-                            name, *output, **self.colors
+                    if isinstance(output, (tuple, list)):
+                        print(
+                            '   {LIGHT_GREEN}*{ENDC} Synced {0}: modules=>{1} '
+                            'states=>{2} grains=>{3} renderers=>{4} '
+                            'returners=>{5}'.format(
+                                name, *output, **self.colors
+                            )
                         )
-                    )
+                    else:
+                        print(
+                            '   {RED_BOLD}*{ENDC} {0} returned: {1}'.format(
+                                name, output, **self.colors
+                            )
+                        )
+
                     # Synced!
                     try:
                         syncing.remove(name)
