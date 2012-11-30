@@ -33,13 +33,14 @@ from salt._compat import string_types
 
 log = logging.getLogger(__name__)
 
+
 class SaltEvent(object):
     '''
     The base class used to manage salt events
     '''
     def __init__(self, node, sock_dir=None, **kwargs):
         self.serial = salt.payload.Serial({'serial': 'msgpack'})
-        self.context = zmq.Context(1)
+        self.context = zmq.Context(10)
         self.poller = zmq.Poller()
         self.cpub = False
         self.cpush = False
@@ -352,4 +353,3 @@ class ReactWrap(object):
         kwargs['fun'] = fun
         wheel = salt.wheel.Wheel(self.opts)
         return wheel.master_call(**kwargs)
-
