@@ -689,9 +689,7 @@ class ShellCase(TestCase):
         process.stdout.close()
 
         try:
-            if catch_stderr:
-                return out.splitlines(), err.splitlines()
-            return out.splitlines()
+            return data[0].splitlines()
         finally:
             try:
                 process.terminate()
