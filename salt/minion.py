@@ -650,24 +650,30 @@ class Minion(object):
         # On first startup execute a state run if configured to do so
         self._state_run()
 
-        while True:
-            try:
-                socks = dict(poller.poll(60000))
-                if socket in socks and socks[socket] == zmq.POLLIN:
-                    payload = self.serial.loads(socket.recv())
-                    self._handle_payload(payload)
-                time.sleep(0.05)
-                multiprocessing.active_children()
-                self.passive_refresh()
-                # Check the event system
-                if epoller.poll(1):
-                    try:
-                        package = epull_sock.recv(zmq.NOBLOCK)
-                        epub_sock.send(package)
-                    except Exception:
-                        pass
-            except Exception:
-                log.critical(traceback.format_exc())
+        try:
+            while True:
+                try:
+                    socks = dict(poller.poll(60000))
+                    if socket in socks and socks[socket] == zmq.POLLIN:
+                        payload = self.serial.loads(socket.recv())
+                        self._handle_payload(payload)
+                    time.sleep(0.05)
+                    multiprocessing.active_children()
+                    self.passive_refresh()
+                    # Check the event system
+                    if epoller.poll(1):
+                        try:
+                            package = epull_sock.recv(zmq.NOBLOCK)
+                            epub_sock.send(package)
+                        except Exception:
+                            pass
+                except Exception:
+                    log.critical(traceback.format_exc())
+        finally:
+            epub_sock.close()
+            epull_sock.close()
+            socket.close()
+            context.term()
 
 
 class Syndic(salt.client.LocalClient, Minion):

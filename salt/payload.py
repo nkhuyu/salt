@@ -123,7 +123,7 @@ class SREQ(object):
     def __init__(self, master, id_='', serial='msgpack', linger=0):
         self.master = master
         self.serial = Serial(serial)
-        context = zmq.Context(1)
+        self.context = zmq.Context(1)
         self.socket = context.socket(zmq.REQ)
         self.socket.linger = linger
         if id_:
@@ -141,15 +141,19 @@ class SREQ(object):
         poller = zmq.Poller()
         poller.register(self.socket, zmq.POLLIN)
         tried = 0
-        while True:
-            if not poller.poll(timeout*1000) and tried >= tries:
-                raise SaltReqTimeoutError('Waited {0} seconds'.format(timeout))
-            else:
-                break
-            tried += 1
-        ret = self.serial.loads(self.socket.recv())
-        poller.unregister(self.socket)
-        return ret
+        try:
+            while True:
+                if not poller.poll(timeout * 1000) and tried >= tries:
+                    raise SaltReqTimeoutError(
+                        'Waited {0} seconds'.format(timeout)
+                    )
+                else:
+                    break
+                tried += 1
+            return self.serial.loads(self.socket.recv())
+        finally:
+            poller.unregister(self.socket)
+            self.context.term()
 
     def send_auto(self, payload):
         '''

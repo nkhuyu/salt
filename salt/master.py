@@ -329,6 +329,8 @@ class Publisher(multiprocessing.Process):
         except KeyboardInterrupt:
             pub_sock.close()
             pull_sock.close()
+        finally:
+            context.term()
 
 
 class ReqServer(object):
@@ -371,13 +373,16 @@ class ReqServer(object):
 
         self.workers.bind(self.w_uri)
 
-        while True:
-            try:
-                zmq.device(zmq.QUEUE, self.clients, self.workers)
-            except zmq.ZMQError as exc:
-                if exc.errno == errno.EINTR:
-                    continue
-                raise exc
+        try:
+            while True:
+                try:
+                    zmq.device(zmq.QUEUE, self.clients, self.workers)
+                except zmq.ZMQError as exc:
+                    if exc.errno == errno.EINTR:
+                        continue
+                    raise exc
+        finally:
+            self.context.term()
 
     def start_publisher(self):
         '''
@@ -453,6 +458,8 @@ class MWorker(multiprocessing.Process):
                     raise exc
         except KeyboardInterrupt:
             socket.close()
+        finally:
+            context.term()
 
     def _handle_payload(self, payload):
         '''
@@ -1040,30 +1047,34 @@ class AESFuncs(object):
                   ' "{arg}", target: "{tgt}"').format(**load))
         pub_sock.send(self.serial.dumps(payload))
         # Run the client get_returns method based on the form data sent
-        if 'form' in clear_load:
-            ret_form = clear_load['form']
-        else:
-            ret_form = 'clean'
-        if ret_form == 'clean':
-            return self.local.get_returns(
+        try:
+            if 'form' in clear_load:
+                ret_form = clear_load['form']
+            else:
+                ret_form = 'clean'
+            if ret_form == 'clean':
+                return self.local.get_returns(
                     jid,
                     self.ckminions.check_minions(
                         clear_load['tgt'],
                         expr_form
-                        ),
+                    ),
                     timeout
-                    )
-        elif ret_form == 'full':
-            ret = self.local.get_full_returns(
+                )
+            elif ret_form == 'full':
+                ret = self.local.get_full_returns(
                     jid,
                     self.ckminions.check_minions(
                         clear_load['tgt'],
                         expr_form
-                        ),
+                    ),
                     timeout
-                    )
-            ret['__jid__'] = jid
-            return ret
+                )
+                ret['__jid__'] = jid
+                return ret
+        finally:
+            pub_sock.close()
+            context.term()
 
     def run_func(self, func, load):
         '''
@@ -1647,6 +1658,10 @@ class ClearFuncs(object):
                 load['tgt'],
                 load.get('tgt_type', 'glob')
                 )
-        return {'enc': 'clear',
-                'load': {'jid': clear_load['jid'],
-                         'minions': minions}}
+        try:
+            return {'enc': 'clear',
+                    'load': {'jid': clear_load['jid'],
+                             'minions': minions}}
+        finally:
+            pub_sock.close()
+            context.term()

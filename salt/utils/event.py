@@ -150,6 +150,9 @@ class SaltEvent(object):
         self.push.send(event)
         return True
 
+    def __del__(self):
+        self.context.term()
+
 
 class MasterEvent(SaltEvent):
     '''
@@ -166,6 +169,7 @@ class MinionEvent(SaltEvent):
     '''
     def __init__(self, **kwargs):
         super(MinionEvent, self).__init__('minion', **kwargs)
+
 
 class EventPublisher(Process):
     '''
