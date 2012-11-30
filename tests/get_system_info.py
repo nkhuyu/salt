@@ -137,15 +137,19 @@ def print_info(pid):
         #print 123, err
         mmap = -1
 
+    thac = threading.active_count()
+    mpac = multiprocessing.active_children()
     print
     print '-' * 70
-    print '           Virtual Memory: {0!r}'.format(vmem)
-    print '              Swap Memory: {0!r}'.format(swap)
-    print '        Current FDS count: {0}'.format(fds)
-    print '       Current open files: {0}'.format(open_files)
-    print 'Current connections count: {0}'.format(connections)
-    print '      Process Memory Info: {0}'.format(mi)
-    print '  Process Ext Memory Info: {0}'.format(mei)
+    print '                 Virtual Memory: {0!r}'.format(vmem)
+    print '                    Swap Memory: {0!r}'.format(swap)
+    print '              Current FDS count: {0}'.format(fds)
+    print '             Current open files: {0}'.format(open_files)
+    print '      Current connections count: {0}'.format(connections)
+    print '            Process Memory Info: {0}'.format(mi)
+    print '        Process Ext Memory Info: {0}'.format(mei)
+    print '            Active Thread Count: {0}'.format(thac)
+    print 'Active Multiprocessing Children: {0}'.format(mpac)
     #print '       Process Memory Map: {0}'.format(mmap)
     print '-' * 70
     print
