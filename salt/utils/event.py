@@ -39,7 +39,7 @@ class SaltEvent(object):
     '''
     def __init__(self, node, sock_dir=None, **kwargs):
         self.serial = salt.payload.Serial({'serial': 'msgpack'})
-        self.context = zmq.Context()
+        self.context = zmq.Context(1)
         self.poller = zmq.Poller()
         self.cpub = False
         self.cpush = False

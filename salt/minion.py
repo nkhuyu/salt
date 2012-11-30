@@ -572,7 +572,7 @@ class Minion(object):
             )
         )
         log.debug('Minion "{0}" trying to tune in'.format(self.opts['id']))
-        context = zmq.Context()
+        context = zmq.Context(1)
 
         # Prepare the minion event system
         #
