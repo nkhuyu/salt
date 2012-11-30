@@ -124,7 +124,8 @@ class SREQ(object):
         self.master = master
         self.serial = Serial(serial)
         self.context = zmq.Context(1)
-        self.socket = context.socket(zmq.REQ)
+        self.socket = self.context.socket(zmq.REQ)
+        self.linger = linger
         self.socket.linger = linger
         if id_:
             self.socket.setsockopt(zmq.IDENTITY, id_)
@@ -153,6 +154,7 @@ class SREQ(object):
             return self.serial.loads(self.socket.recv())
         finally:
             poller.unregister(self.socket)
+            self.socket.close(self.linger)
             self.context.term()
 
     def send_auto(self, payload):
