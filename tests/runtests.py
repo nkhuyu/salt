@@ -58,8 +58,8 @@ def run_suite(opts, path, display_name, suffix='[!_]*.py'):
     if opts.xmlout:
         runner = xmlrunner.XMLTestRunner(output='test-reports').run(tests)
     else:
-        runner = saltunittest.TextTestRunner(
-        #runner = saltunittest.PymplerTextTestRunner(
+        #runner = saltunittest.TextTestRunner(
+        runner = saltunittest.PymplerTextTestRunner(
             verbosity=opts.verbosity
         ).run(tests)
         TEST_RESULTS.append((header, runner))
