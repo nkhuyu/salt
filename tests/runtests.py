@@ -103,6 +103,14 @@ def run_integration_tests(opts):
     resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
     print('Stack size: {0}'.format(resource.getrlimit(resource.RLIMIT_STACK)))
 
+    try:
+        print('RLIMIT_NPROC: {0}'.format(resource.getrlimit(resource.RLIMIT_NPROC)))
+        resource.setrlimit(resource.RLIMIT_NPROC, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+        print('RLIMIT_NPROC: {0}'.format(resource.getrlimit(resource.RLIMIT_NPROC)))
+    except:
+        print('Failed RLIMIT_NPROC')
+
+
     print_header('Setting up Salt daemons to execute tests', top=False)
     status = []
     if not any([opts.client, opts.module, opts.runner,
