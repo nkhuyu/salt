@@ -416,7 +416,7 @@ def parse_opts():
     logging.root.addHandler(filehandler)
     logging.root.setLevel(logging.DEBUG)
 
-    print_header('Logging tests on {0}'.format(logfile), bottom=False)
+    print_header('Logging tests on {0}'.format(LOGFILE), bottom=False)
     print_header(
         'Test suite is running under PID {0}'.format(os.getpid()), bottom=False
     )
