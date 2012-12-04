@@ -416,6 +416,11 @@ def parse_opts():
     logging.root.addHandler(filehandler)
     logging.root.setLevel(logging.DEBUG)
 
+    print_header('Logging tests on {0}'.format(logfile), bottom=False)
+    print_header(
+        'Test suite is running under PID {0}'.format(os.getpid()), bottom=False
+    )
+
     # With greater verbosity we can also log to the console
     if options.verbosity > 2 and sys.stdin.isatty():
         consolehandler = logging.StreamHandler(sys.stderr)
