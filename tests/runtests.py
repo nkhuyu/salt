@@ -416,11 +416,6 @@ def parse_opts():
     logging.root.addHandler(filehandler)
     logging.root.setLevel(logging.DEBUG)
 
-    print_header('Logging tests on {0}'.format(LOGFILE), bottom=False)
-    print_header(
-        'Test suite is running under PID {0}'.format(os.getpid()), bottom=False
-    )
-
     # With greater verbosity we can also log to the console
     if options.verbosity > 2 and sys.stdin.isatty():
         consolehandler = logging.StreamHandler(sys.stderr)
@@ -542,6 +537,7 @@ if __name__ == '__main__':
     print_header('Tests Starting!', bottom=False)
     print('Logging tests on {0}'.format(LOGFILE))
     print('Current directory: {0}'.format(os.getcwd()))
+    print('Test suite is running under PID {0}'.format(os.getpid()))
 
     if opts.coverage:
         code_coverage.start()
