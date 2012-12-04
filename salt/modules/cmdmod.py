@@ -44,6 +44,8 @@ def __virtual__():
 
 
 def _chugid(runas):
+    os.setsid()  # Start a new session! Detached from TTY!
+
     uinfo = pwd.getpwnam(runas)
 
     if os.getuid() == uinfo.pw_uid and os.getgid() == uinfo.pw_gid:
@@ -153,6 +155,9 @@ def _run(cmd,
 
     if runas:
         kwargs['preexec_fn'] = partial(_chugid, runas)
+    elif not sys.platform.startswith('win'):
+        # Detach TTY! Start a new session.
+        kwargs['preexec_fn'] = os.setsid
 
     if not sys.platform.startswith('win'):
         # close_fds is not supported on Windows platforms if you redirect
@@ -319,7 +324,7 @@ def script(
     os.chmod(path, 320)
     os.chown(path, __salt__['file.user_to_uid'](runas), -1)
     ret = _run(
-            path +' '+ args if args else path,
+            path + ' ' + args if args else path,
             cwd=cwd,
             quiet=kwargs.get('quiet', False),
             runas=runas,
@@ -363,6 +368,7 @@ def script_retcode(
             template,
             retcode=True,
             **kwargs)['retcode']
+
 
 def which(cmd):
     '''
