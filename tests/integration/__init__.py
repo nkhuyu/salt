@@ -453,8 +453,9 @@ class TestDaemon(object):
             elif running and job_finished is True:
                 job_finished = False
 
-            if ((evt is None or (evt is not None and evt.is_set())) and
-                                                        job_finished is False):
+            if (evt is None and job_finished is False) or (
+                                            evt is not None and evt.is_set()
+                                            and job_finished is False):
                 sys.stdout.write(
                     '    * {YELLOW}[Quit in {0}]{ENDC} Waiting for {1}'.format(
                         '{0}'.format(expire - now).rsplit('.', 1)[0],
