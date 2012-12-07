@@ -352,7 +352,9 @@ class TestDaemon(object):
         del(wait_minion_connections)
 
         sync_needed = self.opts.clean
-        if self.opts.clean is False:
+        if self.minion_targets.difference(['minion', 'sub_minion']):
+            sync_needed = True
+        elif self.opts.clean is False:
             def sumfile(fpath):
                 # Since we will be do'in this for small files, it should be ok
                 fobj = fopen(fpath)
