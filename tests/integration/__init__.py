@@ -653,6 +653,7 @@ class VagrantTestDaemon(TestDaemon):
                     )
                 )
                 self.__sdist_salt_source_process.terminate()
+                self.__evt_sdist.set()
                 return
         self.__start_machines()
         self.minion_targets.update(self.__machines.keys())
@@ -860,6 +861,9 @@ class VagrantTestDaemon(TestDaemon):
                     )
                     return False
                 continue
+
+            # Restore attempts if we reached here
+            attemps = 3
 
             for name, output in rdata.items():
                 if name in ('minion', 'sub_minion'):
