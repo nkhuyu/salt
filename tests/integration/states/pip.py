@@ -12,7 +12,7 @@ import shutil
 import integration
 
 
-class PipStateTest(integration.ModuleCase):
+class PipStateTest(integration.ModuleCase, integration.SaltReturnAssertsMixIn):
 
     def setUp(self):
         super(PipStateTest, self).setUp()
@@ -35,27 +35,20 @@ class PipStateTest(integration.ModuleCase):
             # Since we don't have the virtualenv created, pip.installed will
             # thrown and error.
             ret = self.run_function('state.sls', mods='pip-installed-errors')
-            self.assertTrue(isinstance(ret, dict))
-            self.assertNotEqual(ret, {})
-
-            for key in ret.keys():
-                self.assertFalse(ret[key]['result'])
-                self.assertRegexpMatches(
-                    ret[key]['comment'],
-                    'Error installing \'supervisor\': {0}: {1}: '
-                    '('
-                    # Running test locally the expected output is
-                    '[nN]o such file or directory'
-                    # Or
-                    '|'
-                    # Running test from within a vagrant machine using our
-                    # runtests custom script, the expected output is
-                    'not found'
-                    ')'.format(shell, venv_dir)
-                )
-                # For those that did not understand, all the above strings are
-                # for the following regex part:
-                #   ([nN]o such file or directory|not found)
+            self.assertSaltFalseReturn(ret)
+            self.assertSaltCommentRegexpMatches(
+                ret,
+                'Error installing \'supervisor\': {0}: {1}: '
+                '('
+                # Running test locally the expected output is
+                '[nN]o such file or directory'
+                # Or
+                '|'
+                # Running test from within a vagrant machine using our
+                # runtests custom script, the expected output is
+                'not found'
+                ')'.format(shell, venv_dir)
+            )
 
             # We now create the missing virtualenv
             ret = self.run_function('virtualenv.create', [venv_dir])
@@ -63,11 +56,7 @@ class PipStateTest(integration.ModuleCase):
 
             # The state should not have any issues running now
             ret = self.run_function('state.sls', mods='pip-installed-errors')
-            self.assertTrue(isinstance(ret, dict))
-            self.assertNotEqual(ret, {})
-
-            for key in ret.keys():
-                self.assertTrue(ret[key]['result'])
+            self.assertSaltTrueReturn(ret)
         finally:
             if os.path.isdir(venv_dir):
                 shutil.rmtree(venv_dir)
@@ -100,9 +89,10 @@ class PipStateTest(integration.ModuleCase):
             ret = self.run_function(
                 'state.sls', mods='pip-installed-weird-install'
             )
-            self.assertTrue(isinstance(ret, dict))
-            self.assertNotEqual(ret, {})
+            self.assertSaltTrueReturn(ret)
 
+            # We cannot use assertInSaltComment here because we need to skip
+            # some of the state return parts
             for key in ret.keys():
                 self.assertTrue(ret[key]['result'])
                 if ret[key]['comment'] == 'Created new virtualenv':
@@ -126,12 +116,7 @@ class PipStateTest(integration.ModuleCase):
         )
 
         try:
-            self.assertTrue(isinstance(ret, dict)), ret
-            self.assertNotEqual(ret, {})
-
-            for key in ret.iterkeys():
-                self.assertTrue(ret[key]['result'])
-
+            self.assertSaltTrueReturn(ret)
             self.assertTrue(
                 os.path.isfile(os.path.join(venv_dir, 'bin', 'supervisord'))
             )
@@ -145,11 +130,9 @@ class PipStateTest(integration.ModuleCase):
         )
 
         try:
-            # XXX: Once state.template_str is fixed, consider not using a file
-            # for this test.
-
             # Let's create the testing virtualenv
-            self.run_function('virtualenv.create', [venv_dir])
+            ret = self.run_function('virtualenv.create', [venv_dir])
+            self.assertEqual(ret['retcode'], 0)
 
             # Let's remove the pip binary
             pip_bin = os.path.join(venv_dir, 'bin', 'pip')
@@ -161,9 +144,9 @@ class PipStateTest(integration.ModuleCase):
 
             # Let's run the state which should fail because pip is missing
             ret = self.run_function('state.sls', mods='issue-2087-missing-pip')
-            self.assertFalse(ret.values()[0]['result'])
-            self.assertEqual(
-                ret.values()[0]['comment'],
+            self.assertSaltFalseReturn(ret)
+            self.assertInSaltComment(
+                ret,
                 'Error installing \'pep8\': Could not find a `pip` binary'
             )
         finally:

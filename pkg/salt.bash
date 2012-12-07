@@ -15,17 +15,17 @@
 
 _salt_get_grains(){
     if [ "$1" = 'local' ] ; then 
-        salt-call --text-out -- grains.ls | sed  's/^.*\[//' | tr -d ",']" |sed 's:\([a-z0-9]\) :\1\: :g'
+        salt-call --out=txt -- grains.ls | sed  's/^.*\[//' | tr -d ",']" |sed 's:\([a-z0-9]\) :\1\: :g'
     else
-      salt '*' --timeout 2 --text-out -- grains.ls | sed  's/^.*\[//' | tr -d ",']" |sed 's:\([a-z0-9]\) :\1\: :g'
+      salt '*' --timeout 2 --out=txt -- grains.ls | sed  's/^.*\[//' | tr -d ",']" |sed 's:\([a-z0-9]\) :\1\: :g'
     fi
 }
 
 _salt_get_grain_values(){
     if [ "$1" = 'local' ] ; then
-        salt-call --text-out -- grains.item $1 |sed 's/^\S*:\s//' |grep -v '^\s*$' 
+        salt-call --out=txt -- grains.item $1 |sed 's/^\S*:\s//' |grep -v '^\s*$' 
     else
-        salt '*' --timeout 2 --text-out -- grains.item $1 |sed 's/^\S*:\s//' |grep -v '^\s*$' 
+        salt '*' --timeout 2 --out=txt -- grains.item $1 |sed 's/^\S*:\s//' |grep -v '^\s*$' 
     fi
 }
 
@@ -42,7 +42,7 @@ _salt(){
 	ppprev="${COMP_WORDS[COMP_CWORD-3]}"
     fi
 
-    opts="--help -h --version -c --compound --raw-out --text-out --json-out --no-color \
+    opts="--help -h --version -c --compound --out=raw --out=txt --out=json --no-color \
           --timeout -t --static -s --batch-size -b -E --pcre -L --list \
           -G --grain --grain-pcre -X --exsel -N --nodegroup -R --range --return \
           -Q --query -c --config -s --static -t --timeout \
@@ -118,7 +118,7 @@ _salt(){
      ;;
     esac
 
-    _salt_coms="$(salt '*' --timeout 2 --text-out -- sys.list_functions | sed 's/^.*\[//' | tr -d ",']" )"
+    _salt_coms="$(salt '*' --timeout 2 --out=txt -- sys.list_functions | sed 's/^.*\[//' | tr -d ",']" )"
     all="${opts} ${_salt_coms}"
     COMPREPLY=( $(compgen -W "${all}" -- ${cur}) )
 
@@ -207,7 +207,7 @@ _saltcall(){
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="-h --help -l --log-level  -d --doc -m --module-dirs --raw-out --text-out --yaml-out --json-out --no-color"
+    opts="-h --help -l --log-level  -d --doc -m --module-dirs --out=raw --out=txt --out=yaml --out=json --no-color"
     if [ ${COMP_CWORD} -gt 2 ]; then
         pprev="${COMP_WORDS[COMP_CWORD-2]}"
     fi
@@ -244,7 +244,7 @@ _saltcall(){
 		;;
     esac
 
-    _salt_coms="$(salt-call --text-out -- sys.list_functions|sed 's/^.*\[//' | tr -d ",']"  )"
+    _salt_coms="$(salt-call --out=txt -- sys.list_functions|sed 's/^.*\[//' | tr -d ",']"  )"
     COMPREPLY=( $(compgen -W "${opts} ${_salt_coms}" -- ${cur} ))
     return 0
 }
@@ -318,4 +318,3 @@ _saltcp(){
 }
 
 complete -F _saltcp salt-cp
-
