@@ -3,7 +3,8 @@
     tests.integration.modules.event
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    :copyright: © 2012 UfSoft.org - :email:`Pedro Algarvio (pedro@algarvio.me)`
+    :codeauthor: :email:`Pedro Algarvio (pedro@algarvio.me)`
+    :copyright: © 2012 by the SaltStack Team, see AUTHORS for more details.
     :license: Apache 2.0, see LICENSE for more details.
 '''
 
@@ -38,8 +39,7 @@ class EventModuleTest(integration.ModuleCase):
 
         eventfired = events.get(block=True, timeout=10)
         self.assertIn(
-            'event.fire_master: just test it!!!!',
-            eventfired['data']
+            'event.fire_master: just test it!!!!', eventfired['data']
         )
 
         ret = self.run_function(
