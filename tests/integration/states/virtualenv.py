@@ -63,14 +63,6 @@ class VirtualenvTest(integration.ModuleCase,
         if os.path.exists(requirements_file_path):
             os.unlink(requirements_file_path)
 
-        #
-        hardcoded_requirements = [
-            'argparse==1.2.1',
-            'distribute==0.6.24',
-            'pep8==1.3.3',
-            'wsgiref==0.1.2'
-        ]
-
         # Out state template
         template = [
             '{0}:'.format(venv_path),
@@ -82,7 +74,7 @@ class VirtualenvTest(integration.ModuleCase,
         ]
 
         # Let's populate the requirements file, just pep-8 for now
-        open(requirements_file_path, 'a').write('\n'.join(hardcoded_requirements))
+        open(requirements_file_path, 'a').write('zope.interface==4.0.1\n')
 
         # Let's run our state!!!
         try:
