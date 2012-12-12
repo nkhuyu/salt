@@ -74,7 +74,7 @@ class VirtualenvTest(integration.ModuleCase,
         ]
 
         # Let's populate the requirements file, just pep-8 for now
-        open(requirements_file_path, 'a').write('zope.interface==4.0.1\n')
+        open(requirements_file_path, 'a').write('pep8==1.3.3\n')
 
         # Let's run our state!!!
         try:
