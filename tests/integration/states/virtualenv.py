@@ -103,11 +103,13 @@ class VirtualenvTest(integration.ModuleCase,
                 os.unlink(requirements_file_path)
             raise
 
+        # Let's make sure, it really got installed
+        ret = self.run_function('pip.freeze', bin_env=venv_path)
+        self.assertIn('pep8==1.3.3', ret)
+        self.assertNotIn('zope.interface==4.0.1', ret)
+
         # Now let's update the requirements file, which is now cached.
         open(requirements_file_path, 'w').write('zope.interface==4.0.1\n')
-
-        # clean existing virtualenv
-        template[3] = '    - clear: true'
 
         # Let's run our state!!!
         try:
@@ -116,13 +118,9 @@ class VirtualenvTest(integration.ModuleCase,
             )
 
             self.assertSaltTrueReturn(ret)
-            self.assertInSaltComment(ret, 'Cleared existing virtualenv')
+            self.assertInSaltComment(ret, 'virtualenv exists')
             self.assertSaltStateChangesEqual(
                 ret, ['zope.interface==4.0.1'], keys=('packages', 'new')
-            )
-
-            self.assertSaltStateChangesEqual(
-                ret, hardcoded_requirements, keys=('cleared_packages',)
             )
         except AssertionError:
             # Always clean up the tests temp files
@@ -131,3 +129,14 @@ class VirtualenvTest(integration.ModuleCase,
             if os.path.exists(requirements_file_path):
                 os.unlink(requirements_file_path)
             raise
+
+        # Let's make sure, it really got installed
+        ret = self.run_function('pip.freeze', bin_env=venv_path)
+        self.assertIn('pep8==1.3.3', ret)
+        self.assertIn('zope.interface==4.0.1', ret)
+
+        # If we reached this point no assertion failed, so, cleanup!
+        if os.path.exists(venv_path):
+            shutil.rmtree(venv_path)
+        if os.path.exists(requirements_file_path):
+            os.unlink(requirements_file_path)
