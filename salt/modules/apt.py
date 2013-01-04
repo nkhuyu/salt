@@ -115,7 +115,7 @@ def refresh_db():
     return servers
 
 
-def install(name=None, refresh=False, repo='', skip_verify=False,
+def install(name=None, refresh=False, fromrepo=None, skip_verify=False,
             debconf=None, pkgs=None, sources=None, **kwargs):
     '''
     Install the passed package, add refresh=True to update the dpkg database.
@@ -133,7 +133,7 @@ def install(name=None, refresh=False, repo='', skip_verify=False,
     refresh
         Whether or not to refresh the package database before installing.
 
-    repo
+    fromrepo
         Specify a package repository to install from
         (e.g., ``apt-get -t unstable install somepackage``)
 
@@ -171,7 +171,7 @@ def install(name=None, refresh=False, repo='', skip_verify=False,
     Returns a dict containing the new package names and versions::
 
         {'<package>': {'old': '<old-version>',
-                       'new': '<new-version>']}
+                       'new': '<new-version>'}}
     '''
     # Note that this function will daemonize the subprocess
     # preventing a restart resulting from a salt-minion upgrade
@@ -187,12 +187,18 @@ def install(name=None, refresh=False, repo='', skip_verify=False,
     pkg_params, pkg_type = __salt__['pkg_resource.parse_targets'](name,
                                                                   pkgs,
                                                                   sources)
+
+    # Support old "repo" argument
+    repo = kwargs.get('repo', '')
+    if not fromrepo and repo:
+        fromrepo = repo
+
+    if kwargs.get('env'):
+        os.environ.update(kwargs.get('env'))
+
     if pkg_params is None or len(pkg_params) == 0:
         return {}
     elif pkg_type == 'file':
-        if repo:
-            log.debug('Skipping "repo" option (invalid for package file '
-                      'installation).')
         cmd = 'dpkg -i {verify} {pkg}'.format(
             verify='--force-bad-verify' if skip_verify else '',
             pkg=' '.join(pkg_params),
@@ -204,18 +210,19 @@ def install(name=None, refresh=False, repo='', skip_verify=False,
                 if kwargs.get(vkey) is not None:
                     fname = '"{0}{1}{2}"'.format(fname, vsign, kwargs[vkey])
                     break
-        cmd = 'apt-get -q -y {confold} {confdef} {verify} {target} install {pkg}'.format(
+        if fromrepo:
+            log.info('Targeting repo "{0}"'.format(fromrepo))
+        cmd = 'apt-get -q -y {confold} {confdef} {verify} {target} install ' \
+              '{pkg}'.format(
             confold='-o DPkg::Options::=--force-confold',
             confdef='-o DPkg::Options::=--force-confdef',
             verify='--allow-unauthenticated' if skip_verify else '',
-            target='-t {0}'.format(repo) if repo else '',
+            target='-t {0}'.format(fromrepo) if fromrepo else '',
             pkg=fname,
         )
 
     old = list_pkgs()
-    stderr = __salt__['cmd.run_all'](cmd).get('stderr', '')
-    if stderr:
-        log.error(stderr)
+    __salt__['cmd.run_all'](cmd)
     new = list_pkgs()
     return __salt__['pkg_resource.find_changes'](old, new)
 
@@ -232,6 +239,9 @@ def remove(pkg):
     '''
     ret_pkgs = []
     old_pkgs = list_pkgs()
+
+    if kwargs.get('env'):
+        os.environ.update(kwargs.get('env'))
 
     cmd = 'apt-get -q -y remove {0}'.format(pkg)
     __salt__['cmd.run'](cmd)
@@ -257,6 +267,9 @@ def purge(pkg):
     ret_pkgs = []
     old_pkgs = list_pkgs()
 
+    if kwargs.get('env'):
+        os.environ.update(kwargs.get('env'))
+
     # Remove inital package
     purge_cmd = 'apt-get -q -y purge {0}'.format(pkg)
     __salt__['cmd.run'](purge_cmd)
@@ -279,7 +292,7 @@ def upgrade(refresh=True, **kwargs):
 
         [
             {'<package>':  {'old': '<old-version>',
-                        'new': '<new-version>']
+                            'new': '<new-version>'}
             }',
             ...
         ]
@@ -304,10 +317,10 @@ def upgrade(refresh=True, **kwargs):
                 continue
             else:
                 ret_pkgs[pkg] = {'old': old_pkgs[pkg],
-                             'new': new_pkgs[pkg]}
+                                 'new': new_pkgs[pkg]}
         else:
             ret_pkgs[pkg] = {'old': '',
-                         'new': new_pkgs[pkg]}
+                             'new': new_pkgs[pkg]}
 
     return ret_pkgs
 
@@ -346,20 +359,23 @@ def list_pkgs(regex_string=''):
                                                         'installed' in cols[2]:
             __salt__['pkg_resource.add_pkg'](ret, cols[3], cols[4])
 
-    # If ret is empty at this point, check to see if the package is virtual.
-    # We also need aptitude past this point.
-    if not ret and __salt__['cmd.has_exec']('aptitude'):
-        cmd = (
-            'aptitude search "?name(^{0}$) ?virtual '
-            '?reverse-provides(?installed)"'.format(
-                regex_string
-            )
-        )
+    # Check for virtual packages. We need aptitude for this.
+    if __salt__['cmd.has_exec']('aptitude'):
+        if not ret:
+            search_string = regex_string
+        else:
+            search_string = '.+'
+        cmd = 'aptitude search "?name(^{0}$) ?virtual ' \
+              '?reverse-provides(?installed)"'.format(search_string)
 
         out = __salt__['cmd.run_stdout'](cmd)
-        if out:
-            ret[regex_string] = '1'  # Setting all 'installed' virtual package
-                                     # versions to '1'
+        for line in out.splitlines():
+            # Setting all matching 'installed' virtual package versions to 1
+            try:
+                name = line.split()[1]
+            except IndexError:
+                continue
+            __salt__['pkg_resource.add_pkg'](ret, name, '1')
 
     __salt__['pkg_resource.sort_pkglist'](ret)
     return ret
@@ -388,13 +404,13 @@ def _get_upgradable():
 
     upgrades = rexp.findall(out)
 
-    r = {}
+    ret = {}
     for line in upgrades:
         name = _get(line, 'name')
         version = _get(line, 'version')
-        r[name] = version
+        ret[name] = version
 
-    return r
+    return ret
 
 
 def list_upgrades():
@@ -405,8 +421,7 @@ def list_upgrades():
 
         salt '*' pkg.list_upgrades
     '''
-    r = _get_upgradable()
-    return r
+    return _get_upgradable()
 
 
 def upgrade_available(name):
@@ -417,5 +432,4 @@ def upgrade_available(name):
 
         salt '*' pkg.upgrade_available <package name>
     '''
-    r = name in _get_upgradable()
-    return r
+    return name in _get_upgradable()

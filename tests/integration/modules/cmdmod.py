@@ -141,9 +141,10 @@ sys.stdout.write('cheese')
         cmd = '''echo 'SELECT * FROM foo WHERE bar="baz"' '''
         expected_result = 'SELECT * FROM foo WHERE bar="baz"'
 
-        result = self.run_function('cmd.run_stdout', [cmd], runas=runas)
-
-        self.assertEqual(result.strip(), expected_result)
+        result = self.run_function(
+            'cmd.run_stdout', [cmd], runas=runas
+        ).strip()
+        self.assertEqual(result, expected_result)
 
 
 if __name__ == '__main__':

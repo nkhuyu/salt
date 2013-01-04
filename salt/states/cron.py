@@ -35,6 +35,8 @@ then a new cron job will be added to the user's crontab.
 
 # Import python libs
 import os
+
+# Import salt libs
 from salt.utils import mkstemp
 
 
@@ -45,11 +47,11 @@ def _check_cron(cmd, user, minute, hour, dom, month, dow):
     lst = __salt__['cron.list_tab'](user)
     for cron in lst['crons']:
         if cmd == cron['cmd']:
-            if not minute == cron['min'] or \
-                    not hour == cron['hour'] or \
-                    not dom == cron['daymonth'] or \
-                    not month == cron['month'] or \
-                    not dow == cron['dayweek']:
+            if not str(minute) == cron['min'] or \
+                    not str(hour) == cron['hour'] or \
+                    not str(dom) == cron['daymonth'] or \
+                    not str(month) == cron['month'] or \
+                    not str(dow) == cron['dayweek']:
                 return 'update'
             return 'present'
     return 'absent'
@@ -324,20 +326,20 @@ def file(name,
         return ret
 
     if __opts__['test']:
-        r = __salt__['file.check_managed'](cron_path,
-                                           source,
-                                           source_hash,
-                                           owner,
-                                           group,
-                                           mode,
-                                           template,
-                                           False,  # makedirs = False
-                                           context,
-                                           defaults,
-                                           env,
-                                           **kwargs
-                                           )
-        ret['result'], ret['comment'] = r
+        fcm = __salt__['file.check_managed'](cron_path,
+                                             source,
+                                             source_hash,
+                                             owner,
+                                             group,
+                                             mode,
+                                             template,
+                                             False,  # makedirs = False
+                                             context,
+                                             defaults,
+                                             env,
+                                             **kwargs
+                                             )
+        ret['result'], ret['comment'] = fcm
         os.unlink(cron_path)
         return ret
 

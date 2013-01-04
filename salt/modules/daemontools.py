@@ -15,7 +15,10 @@ __outputter__ = {
     'get_all': 'yaml',
 }
 
-SERVICE_DIR = "/service"
+if os.path.exists('/service'):
+    SERVICE_DIR = "/service"
+elif os.path.exists('/var/service'):
+    SERVICE_DIR = "/var/service"
 
 
 def _service_path(name):
@@ -23,6 +26,7 @@ def _service_path(name):
     build service path
     '''
     return '{0}/{1}'.format(SERVICE_DIR, name)
+
 
 #-- states.service  compatible args
 def start(name, enable=None, sig=None):
@@ -103,11 +107,11 @@ def status(name, sig=None):
     '''
     cmd = 'svstat {0}'.format(_service_path(name))
     ret = __salt__['cmd.run_stdout'](cmd)
-    m = re.search('\(pid (\d+)\)', ret)
+    match = re.search('\(pid (\d+)\)', ret)
     try:
-      pid = m.group(1)
+        pid = match.group(1)
     except:
-      pid = ''
+        pid = ''
     return pid
 
 

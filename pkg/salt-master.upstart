@@ -1,4 +1,4 @@
-description "salt-master"
+description "Salt Master"
 
 start on (net-device-up
           and local-filesystems

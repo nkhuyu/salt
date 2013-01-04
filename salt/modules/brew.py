@@ -4,8 +4,6 @@ Homebrew for Mac OS X
 
 # Import salt libs
 import salt
-from salt.modules.yumpkg import _compare_versions
-
 
 def __virtual__():
     '''
@@ -14,6 +12,7 @@ def __virtual__():
 
     if salt.utils.which('brew') and __grains__['os'] == 'MacOS':
         return 'pkg'
+    return False
 
 
 def list_pkgs(*args):
@@ -68,7 +67,7 @@ def remove(pkgs):
     return __salt__['cmd.run'](cmd)
 
 
-def install(pkgs, refresh=False, repo='', skip_verify=False, **kwargs):
+def install(pkgs, refresh=False, skip_verify=False, **kwargs):
     '''
     Install the passed package(s) with ``brew install``
 
@@ -78,7 +77,7 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, **kwargs):
     Return a dict containing the new package names and versions::
 
         {'<package>': {'old': '<old-version>',
-                   'new': '<new-version>']}
+                       'new': '<new-version>'}}
 
     CLI Example::
 
@@ -101,9 +100,7 @@ def install(pkgs, refresh=False, repo='', skip_verify=False, **kwargs):
         __salt__['cmd.run'](cmd)
 
     new = list_pkgs(*pkgs)
-
-    return _compare_versions(old, new)
-
+    return __salt__['pkg_resource.find_changes'](old, new)
 
 def list_upgrades():
     '''

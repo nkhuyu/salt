@@ -31,6 +31,15 @@ language.
 
 Read the :doc:`Salt overview <topics/index>` for a more thorough description.
 
+Salt (Masterless) Quickstart
+----------------------------
+
+Install salt-minion and provision a webserver in 3 easy steps. The fastest way to start
+using salt's configuration management.
+
+:doc:`Salt Quickstart </topics/tutorials/quickstart>`
+
+
 Tutorial 1: Remote execution
 ----------------------------
 
@@ -83,7 +92,7 @@ Targeting is specifying which minions should execute commands or manage server
 configuration.
 
 :doc:`Globbing and regex </topics/targeting/globbing>`
-    Match minions using globing and regular expressions.
+    Match minions using globbing and regular expressions.
 
 :doc:`Grains </topics/targeting/grains>`
     Match minions using bits of static information about the minion such as
@@ -211,6 +220,13 @@ Salt is many splendid things.
     Use a frozen install to make deployments easier (Even on Windows!). Or
     take advantage of automatic updates to keep your minions running your
     latest builds.
+
+:doc:`Windows Software Manager / Package Repository <ref/windows-package-manager>`
+    Looking for an easy way to manage software on all your Windows machines? Do
+    you feel left out of all the package manager magic found in yum and apt?
+    Search no more! Salt has an integrated software package manager for your
+    Windows machines! Install software hosted on your master, somewhere on your
+    network, or anywhere http, https, and ftp work.
 
 Reference
 ---------
