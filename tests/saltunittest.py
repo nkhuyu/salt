@@ -52,12 +52,14 @@ class TestCase(OTestCase):
         self.__old_syspath = sys.path[:]
         # Record sys.modules here so we can restore it in tearDown.
         self.__old_modules = dict(sys.modules)
+        super(TestCase, self).setUp()
 
     def tearDown(self):
         # Restore the original sys.path.
         sys.path = self.__old_syspath
         # Restore any loaded modules
         self.__clean_modules()
+        super(TestCase, self).tearDown()
 
     def __clean_modules(self):
         """Remove any new modules imported during the test run.
