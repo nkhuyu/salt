@@ -62,11 +62,12 @@ class TestCase(OTestCase):
         super(TestCase, self).tearDown()
 
     def __clean_modules(self):
-        """Remove any new modules imported during the test run.
+        '''
+        Remove any new modules imported during the test run.
 
         This lets us import the same source files for more than one test.
 
-        """
+        '''
         for m in [m for m in sys.modules if m not in self.__old_modules]:
             del sys.modules[m]
 
