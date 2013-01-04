@@ -11,6 +11,7 @@ test from here
 import os
 import sys
 import logging
+import types
 from functools import wraps
 
 # support python < 2.7 via unittest2
@@ -19,7 +20,7 @@ if sys.version_info[0:2] < (2, 7):
         from unittest2 import (
             TestLoader,
             TextTestRunner,
-            TestCase as OTestCase,
+            TestCase as OriginalTestCase,
             expectedFailure,
             TestSuite,
             skipIf,
@@ -30,7 +31,7 @@ else:
     from unittest import (
         TestLoader,
         TextTestRunner,
-        TestCase as OTestCase,
+        TestCase as OriginalTestCase,
         expectedFailure,
         TestSuite,
         skipIf,
@@ -46,30 +47,39 @@ for dir_ in [TEST_DIR, SALT_LIBS]:
         sys.path.insert(0, dir_)
 
 
-class TestCase(OTestCase):
-    def setUp(self):
-        # tearDown will restore the original sys.path
-        self.__old_syspath = sys.path[:]
-        # Record sys.modules here so we can restore it in tearDown.
-        self.__old_modules = dict(sys.modules)
-        super(TestCase, self).setUp()
+class TestCase(OriginalTestCase):
 
-    def tearDown(self):
-        # Restore the original sys.path.
-        sys.path = self.__old_syspath
-        # Restore any loaded modules
-        self.__clean_modules()
-        super(TestCase, self).tearDown()
+    def __new__(cls, *args, **kwargs):
+        instance = super(TestCase, cls).__new__(cls, *args, **kwargs)
 
-    def __clean_modules(self):
-        '''
-        Remove any new modules imported during the test run.
+        def wrap_pre(func):
+            @wraps(func)
+            def wrap(*args, **kwargs):
+                # tearDown will restore the original sys.path
+                instance.__old_syspath = sys.path[:]
+                # Record sys.modules here so we can restore it in tearDown.
+                instance.__old_modules = dict(sys.modules)
+                return func(*args, **kwargs)
+            return wrap
+        instance.setUp = wrap_pre(instance.setUp)
 
-        This lets us import the same source files for more than one test.
+        def wrap_post(func):
+            @wraps(func)
+            def wrap(*args, **kwargs):
+                try:
+                    func(*args, **kwargs)
+                finally:
+                    # Restore system path
+                    sys.path = instance.__old_syspath
+                    # Restore any loaded modules
+                    for m in [m for m in sys.modules if
+                              m not in instance.__old_modules]:
+                        del sys.modules[m]
+                    instance.__old_modules = instance.__old_syspath = None
+            return wrap
+        instance.tearDown = wrap_post(instance.tearDown)
 
-        '''
-        for m in [m for m in sys.modules if m not in self.__old_modules]:
-            del sys.modules[m]
+        return instance
 
 
 def destructiveTest(func):
