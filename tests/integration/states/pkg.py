@@ -29,7 +29,6 @@ class PkgStateTest(integration.ModuleCase, integration.SaltReturnAssertsMixIn):
         template = '\n'.join(template_lines)
         try:
             ret = self.run_function('state.template_str', [template])
-            print 77778888899999, ret
             self.assertSaltFalseReturn(ret)
         except AssertionError:
             raise
