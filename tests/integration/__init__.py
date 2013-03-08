@@ -56,8 +56,6 @@ FILES = os.path.join(INTEGRATION_TEST_DIR, 'files')
 MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
 TMP_STATE_TREE = os.path.join(SYS_TMP_DIR, 'salt-temp-state-tree')
 
-log = logging.getLogger(__name__)
-
 
 def print_header(header, sep='~', top=True, bottom=True, inline=False,
                  centered=False):
@@ -421,7 +419,11 @@ class TestDaemon(object):
         now = datetime.now()
         expire = now + timedelta(seconds=timeout)
         job_finished = False
-        log.debug('Waiting for JID {0}, timeout {1}'.format(jid, timeout))
+        logging.getLogger(__name__).info(
+            'Waiting for JID {0}, timeout {1}. Expiration: {2}'.format(
+                jid, timeout, expire
+            )
+        )
         while now <= expire:
             running = self.__client_job_running(targets, jid)
             sys.stdout.write('\r' + ' ' * PNUM + '\r')
@@ -456,9 +458,13 @@ class TestDaemon(object):
         running = self.client.cmd(
             list(targets), 'saltutil.running', expr_form='list'
         )
-        return [
+        running = [
             k for (k, v) in running.iteritems() if v and v[0]['jid'] == jid
         ]
+        logging.getLogger(__name__).info(
+            'Job running check result: {0}'.format(running)
+        )
+        return running
 
     def wait_for_minion_connections(self, targets, timeout):
         sys.stdout.write(
@@ -532,7 +538,9 @@ class TestDaemon(object):
             timeout=sys.maxint,
         )
 
-        log.debug('Waiting for minions to sync: {0}'.format(syncing))
+        logging.getLogger(__name__).info(
+            'Waiting for minions to sync: {0}'.format(syncing)
+        )
 
         if self.wait_for_jid(targets, jid_info['jid'], timeout) is False:
             print(
