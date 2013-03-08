@@ -5,13 +5,17 @@ python:
   - '2.7'
 
 before_install:
-  - sudo add-apt-repository -y ppa:saltstack/salt
   - sudo apt-get update
-  #- sudo apt-get install --fix-broken --ignore-missing -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" libzmq3 python-zmq
-  - sudo apt-get install --fix-broken --ignore-missing -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" swig supervisor rabbitmq-server ruby python-yaml python-m2crypto python-crypto msgpack-python python-jinja2
+  - sudo apt-get install --fix-broken --ignore-missing -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" swig supervisor rabbitmq-server ruby
+  - pip install jinja2 --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install msgpack-python --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install pycrypto --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install PyYAML --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install "pyzmq>=2.1.9" --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install http://dl.dropbox.com/u/174789/m2crypto-0.20.1.tar.gz
   - (git describe && git fetch --tags) || (git remote add upstream git://github.com/saltstack/salt.git && git fetch --tags upstream)
   - "if [[ $TRAVIS_PYTHON_VERSION == '2.6' ]]; then pip install --use-mirrors --mirrors=http://testpypi.python.org/pypi unittest2 ordereddict; fi"
-  - pip install pyzmq mock --use-mirrors --mirrors=http://testpypi.python.org/pypi
+  - pip install mock --use-mirrors --mirrors=http://testpypi.python.org/pypi
   - sudo find / -name *zmq* -print
 
 install: "sudo -E /home/travis/virtualenv/python${TRAVIS_PYTHON_VERSION}/bin/python setup.py install"
