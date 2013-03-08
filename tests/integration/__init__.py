@@ -12,6 +12,7 @@ import tempfile
 import time
 import signal
 import subprocess
+import logging
 from hashlib import md5
 from subprocess import PIPE, Popen
 from datetime import datetime, timedelta
@@ -54,6 +55,8 @@ TMP = os.path.join(SYS_TMP_DIR, 'salt-tests-tmpdir')
 FILES = os.path.join(INTEGRATION_TEST_DIR, 'files')
 MOCKBIN = os.path.join(INTEGRATION_TEST_DIR, 'mockbin')
 TMP_STATE_TREE = os.path.join(SYS_TMP_DIR, 'salt-temp-state-tree')
+
+log = logging.getLogger(__name__)
 
 
 def print_header(header, sep='~', top=True, bottom=True, inline=False,
@@ -274,7 +277,6 @@ class TestDaemon(object):
                 '~~~~~~~ Minion Grains Information ', inline=True,
             )
 
-
         print_header('', sep='=', inline=True)
 
         try:
@@ -419,6 +421,7 @@ class TestDaemon(object):
         now = datetime.now()
         expire = now + timedelta(seconds=timeout)
         job_finished = False
+        log.debug('Waiting for JID {0}, timeout {1}'.format(jid, timeout))
         while now <= expire:
             running = self.__client_job_running(targets, jid)
             sys.stdout.write('\r' + ' ' * PNUM + '\r')
@@ -526,8 +529,10 @@ class TestDaemon(object):
         jid_info = self.client.run_job(
             list(targets), 'saltutil.sync_modules',
             expr_form='list',
-            timeout=9999999999999999,
+            timeout=sys.maxint,
         )
+
+        log.debug('Waiting for minions to sync: {0}'.format(syncing))
 
         if self.wait_for_jid(targets, jid_info['jid'], timeout) is False:
             print(
