@@ -14,7 +14,36 @@ Package repositories can be managed with the pkgrepo state:
             - #http://mirror.centos.org/centos/$releasever/os/$basearch/
         - gpgcheck: 1
         - gpgkey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-6
+
+.. code-block::yaml
+    base:
+      pkgrepo.managed:
+        - human_name: Logstash PPA
+        - name: deb http://ppa.launchpad.net/wolfnet/logstash/ubuntu precise main
+        - dist: precise
+        - file: /etc/apt/sources.list.d/logstash.list
+        - keyid: 28B04E4A
+        - keyserver: keyserver.ubuntu.com
+        - require_in:
+          - pkg: logstash
+
+      pkg.latest:
+        - name: logstash
+        - refresh: True
+
+.. code-block::yaml
+    base:
+      pkgrepo.managed:
+        - ppa: wolfnet/logstash
+      pkg.latest:
+        - name: logstash
+        - refresh: True
 '''
+
+from urllib2 import urlopen, Request, HTTPError
+from json import load
+
+LAUNCHPAD_SOURCE_FORMAT = 'deb http://ppa.launchpad.net/{0}/{1}/ubuntu {2} main'
 
 
 def __virtual__():
@@ -22,6 +51,22 @@ def __virtual__():
     Only load if modifying repos is available for this package type
     '''
     return 'pkgrepo' if 'pkg.mod_repo' in __salt__ else False
+
+
+def _get_ppa_info_from_launchpad(owner_name, ppa_name):
+    '''
+    Idea from softwareproperties.ppa.
+    Uses urllib2 which sacrifices server cert verification.
+
+    :param owner_name:
+    :param ppa_name:
+    :return:
+    '''
+
+    lp_url = 'https://launchpad.net/api/1.0/~{0}/+archive/{1}'.format(owner_name, ppa_name)
+    request = Request(lp_url, headers={'Accept': 'application/json'})
+    lp_page = urlopen(request)
+    return load(lp_page)
 
 
 def managed(name, **kwargs):
@@ -61,13 +106,22 @@ def managed(name, **kwargs):
 
     For apt-based systems, take note of the following configuration values:
 
-    name:
-        on apt-based systems this must be the complete entry as it would be
+    ppa
+        On Ubuntu, you can take advantage of Personal Package Archives on
+        Launchpad simply by specifying the user and archive name. The keyid
+        will be queried from launchpad and everything else is set
+        automatically. You can override any of the below settings by simply
+        setting them as you would normally.
+
+          EXAMPLE: ppa: wolfnet/logstash
+
+    name
+        On apt-based systems this must be the complete entry as it would be
         seen in the sources.list file.  This can have a limited subset of
         components (i.e. 'main') which can be added/modified with the
         "comps" option.
 
-          EXAMPLE: deb http://us.archive.ubuntu.com/ubuntu/ precise main
+          EXAMPLE: name: deb http://us.archive.ubuntu.com/ubuntu/ precise main
 
     disabled
         On apt-based systems, disabled toggles whether or not the repo is
@@ -98,7 +152,7 @@ def managed(name, **kwargs):
     key_url
        A web url to retreive the GPG key from.
 
-    consolidate:
+    consolidate
        If set to true, this will consolidate all sources definitions to
        the sources.list file, cleanup the now unused files, consolidate
        components (e.g. main) for the same uri, type, and architecture
@@ -106,6 +160,10 @@ def managed(name, **kwargs):
        file.  The consolidate will run every time the state is processed. The
        option only needs to be set on one repo managed by salt to take effect.
 
+    require_in
+        Set this to a list of pkg.installed or pkg.lastest to trigger the running
+        of apt-get update prior to attempting to install these packages.
+        Setting a require in the pkg will not work for this.
     '''
     ret = {'name': name,
            'changes': {},
@@ -119,6 +177,26 @@ def managed(name, **kwargs):
 
     # pkg.mod_repo has conflicting kwargs, so move 'em around
     repokwargs = {}
+    # ppa has a lot of implicit arguments. Make them explicit.
+    # And then let the user override them if they want to.
+    if 'ppa' in kwargs:
+        (owner_name, ppa_name) = kwargs['ppa'].split('/')
+        dist = __salt__['grains.item']('oscodename')
+        repokwargs['dist'] = dist
+        repokwargs['file'] = '/etc/apt/sources.list.d/{0}-{1}-{2}.list'.format(dist, owner_name, ppa_name)
+        repokwargs['name'] = repokwargs['repo'] = LAUNCHPAD_SOURCE_FORMAT.format(owner_name, ppa_name, dist)
+        try:
+            launchpad_ppa_info = _get_ppa_info_from_launchpad(owner_name, ppa_name)
+            # I think you can use a fingerprint in place of an id...
+            repokwargs['keyid'] = launchpad_ppa_info['signing_key_fingerprint']
+        except HTTPError, e:
+            ret['comment'] = 'Launchpad does not know about {0}/{1}: {2}'.format(owner_name, ppa_name, e)
+            ret['result'] = False
+        except IndexError, e:
+            ret['comment'] = 'Launchpad knows about {0}/{1} but did not return a fingerprint. Please set keyid manually.'.format(owner_name, ppa_name)
+            ret['result'] = False
+        repokwargs['keyserver'] = 'keyserver.ubuntu.com'
+
     for kwarg in kwargs.keys():
         if kwarg == 'name':
             repokwargs['repo'] = kwargs[kwarg]
@@ -157,11 +235,11 @@ def managed(name, **kwargs):
         if repo:
             for kwarg in repokwargs:
                 if repodict.get(kwarg) != repo.get(kwarg):
-                    change = { 'new': repodict[kwarg],
-                               'old': repo.get(kwarg) }
+                    change = {'new': repodict[kwarg],
+                              'old': repo.get(kwarg)}
                     ret['changes'][kwarg] = change
         else:
-            ret['changes'] = { 'repo': name }
+            ret['changes'] = {'repo': name}
         ret['result'] = True
         ret['comment'] = 'Configured package repo {0}'.format(name)
     except Exception, e:
