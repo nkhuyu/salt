@@ -389,17 +389,16 @@ class Minion(object):
             minion_instance = class_(opts)
         if opts['multiprocessing']:
             fn_ = os.path.join(minion_instance.proc_dir, data['jid'])
-            print 'Daemonize {0}'.format(os.getpid())
             salt.utils.daemonize_if(opts, **data)
             sdata = {'pid': os.getpid()}
-            print 'Pose Daemon {0}'.format(os.getpid())
             sdata.update(data)
             with salt.utils.fopen(fn_, 'w+') as fp_:
                 fp_.write(minion_instance.serial.dumps(sdata))
         ret = {}
         for ind in range(0, len(data['arg'])):
             try:
-                arg = yaml.safe_load(data['arg'][ind])
+                if '\n' not in data['arg'][ind]:
+                    arg = yaml.safe_load(data['arg'][ind])
                 if isinstance(arg, bool):
                     data['arg'][ind] = str(data['arg'][ind])
                 elif isinstance(arg, (dict, int, list, string_types)):
@@ -479,7 +478,8 @@ class Minion(object):
         for ind in range(0, len(data['fun'])):
             for index in range(0, len(data['arg'][ind])):
                 try:
-                    arg = yaml.safe_load(data['arg'][ind][index])
+                    if '\n' not in data['arg'][ind]:
+                        arg = yaml.safe_load(data['arg'][ind][index])
                     if isinstance(arg, bool):
                         data['arg'][ind][index] = str(data['arg'][ind][index])
                     elif isinstance(arg, (dict, int, list, string_types)):
