@@ -64,6 +64,12 @@ class Master(parsers.MasterOptionParser):
                     # Logfile is not using Syslog, verify
                     verify_files([logfile], self.config['user'])
         except OSError as err:
+            logger.error(
+                'An error occurred while verifying the '
+                'environment: {0}'.format(err),
+                # Show the traceback if the debug logging level is enabled
+                exc_info=logger.isEnabledFor(logging.DEBUG)
+            )
             sys.exit(err.errno)
 
         self.setup_logfile_logger()
@@ -95,6 +101,14 @@ class Master(parsers.MasterOptionParser):
         if check_user(self.config['user']):
             try:
                 self.master.start()
+            except Exception, err:
+                logger.error(
+                    'An error occurred while starting the master: {0}'.format(
+                        err
+                    ),
+                    # Show the traceback if the debug logging level is enabled
+                    exc_info=logger.isEnabledFor(logging.DEBUG)
+                )
             except MasterExit:
                 self.shutdown()
             finally:
@@ -124,16 +138,21 @@ class Minion(parsers.MinionOptionParser):
             if self.config['verify_env']:
                 confd = self.config.get('default_include')
                 if confd:
-                  # If 'default_include' is specified in config, then use it
-                  if '*' in confd:
-                      # Value is of the form "minion.d/*.conf"
-                      confd = os.path.dirname(confd)
-                  if not os.path.isabs(confd):
-                      # If configured 'default_include' is not an absolute path,
-                      # consider it relative to folder of 'conf_file' (/etc/salt by default)
-                      confd = os.path.join(os.path.dirname(self.config['conf_file']), confd)
+                    # If 'default_include' is specified in config, then use it
+                    if '*' in confd:
+                        # Value is of the form "minion.d/*.conf"
+                        confd = os.path.dirname(confd)
+                    if not os.path.isabs(confd):
+                        # If configured 'default_include' is not an absolute
+                        # path, consider it relative to folder of 'conf_file'
+                        # (/etc/salt by default)
+                        confd = os.path.join(
+                            os.path.dirname(self.config['conf_file']), confd
+                        )
                 else:
-                    confd = os.path.join(os.path.dirname(self.config['conf_file']), 'minion.d')
+                    confd = os.path.join(
+                        os.path.dirname(self.config['conf_file']), 'minion.d'
+                    )
                 verify_env(
                     [
                         self.config['pki_dir'],
@@ -153,11 +172,17 @@ class Minion(parsers.MinionOptionParser):
                     # Logfile is not using Syslog, verify
                     verify_files([logfile], self.config['user'])
         except OSError as err:
+            logger.error(
+                'An error occurred while verifying the '
+                'environment: {0}'.format(err),
+                # Show the traceback if the debug logging level is enabled
+                exc_info=logger.isEnabledFor(logging.DEBUG)
+            )
             sys.exit(err.errno)
 
         self.setup_logfile_logger()
         logger.info(
-            'Setting up the Salt Minion "{0}"'.format(
+            'Setting up the Salt Minion {0!r}'.format(
                 self.config['id']
             )
         )
@@ -192,6 +217,14 @@ class Minion(parsers.MinionOptionParser):
                 logger.warn('Exiting on Ctrl-c')
             else:
                 logger.error(str(e))
+        except Exception, err:
+            logger.error(
+                'An error occurred while starting the minion: {0}'.format(
+                    err
+                ),
+                # Show the traceback if the debug logging level is enabled
+                exc_info=logger.isEnabledFor(logging.DEBUG)
+            )
         finally:
             self.shutdown()
 
