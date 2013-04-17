@@ -19,6 +19,7 @@ import urlparse
 import logging
 import logging.handlers
 
+AUDIT = logging.AUDIT = 100
 TRACE = logging.TRACE = 5
 GARBAGE = logging.GARBAGE = 1
 
@@ -67,7 +68,9 @@ def is_temp_logging_configured():
 if sys.version_info < (2, 7):
     # Since the NullHandler is only available on python >= 2.7, here's a copy
     class NullHandler(logging.Handler):
-        """ This is 1 to 1 copy of python's 2.7 NullHandler"""
+        '''
+        This is a 1 to 1 copy of python's 2.7 NullHandler
+        '''
         def handle(self, record):
             pass
 
@@ -222,6 +225,7 @@ class SaltLoggingClass(LOGGING_LOGGER_CLASS):
 if logging.getLoggerClass() is not SaltLoggingClass:
 
     logging.setLoggerClass(SaltLoggingClass)
+    logging.addLevelName(AUDIT, 'AUDIT')
     logging.addLevelName(TRACE, 'TRACE')
     logging.addLevelName(GARBAGE, 'GARBAGE')
 
@@ -363,6 +367,13 @@ def setup_logfile_logger(log_path, log_level='error', log_format=None,
         )
         return
 
+    handler = __setup_logfile_handler(log_path)
+    if handler is None:
+        # Do not proceed with any more configuration since it will fail, we
+        # have the temp logging already setup and the user should see
+        # the error.
+        return
+
     # Remove the temporary logging handler
     __remove_temp_logging_handler()
 
@@ -370,16 +381,42 @@ def setup_logfile_logger(log_path, log_level='error', log_format=None,
         log_level = 'warning'
 
     level = LOG_LEVELS.get(log_level.lower(), logging.ERROR)
+    handler.setLevel(level)
 
+    # Set the default console formatter config
+    if not log_format:
+        log_format = '%(asctime)s [%(name)-15s][%(levelname)-8s] %(message)s'
+    if not date_format:
+        date_format = '%Y-%m-%d %H:%M:%S'
+
+    formatter = logging.Formatter(log_format, datefmt=date_format)
+
+    handler.setFormatter(formatter)
+    logging.getLogger().addHandler(handler)
+
+    global __LOGFILE_CONFIGURED
+    __LOGFILE_CONFIGURED = True
+
+
+def set_logger_level(logger_name, log_level='error'):
+    '''
+    Tweak a specific logger's logging level
+    '''
+    logging.getLogger(logger_name).setLevel(
+        LOG_LEVELS.get(log_level.lower(), logging.ERROR)
+    )
+
+
+def __setup_logfile_handler(log_path):
+    '''
+    Generic log file handler setup function
+    '''
     parsed_log_path = urlparse.urlparse(log_path)
-
-    root_logger = logging.getLogger()
 
     if parsed_log_path.scheme in ('tcp', 'udp', 'file'):
         syslog_opts = {
             'facility': logging.handlers.SysLogHandler.LOG_USER,
             'socktype': socket.SOCK_DGRAM
-
         }
 
         if parsed_log_path.scheme == 'file' and parsed_log_path.path:
@@ -443,7 +480,7 @@ def setup_logfile_logger(log_path, log_level='error', log_format=None,
 
         try:
             # Et voilá! Finally our syslog handler instance
-            handler = logging.handlers.SysLogHandler(**syslog_opts)
+            return logging.handlers.SysLogHandler(**syslog_opts)
         except socket.error, err:
             logging.getLogger(__name__).error(
                 'Failed to setup the Syslog logging handler: {0}'.format(
@@ -454,46 +491,33 @@ def setup_logfile_logger(log_path, log_level='error', log_format=None,
             # have the console logging already setup and the user should see
             # the error.
             return
-    else:
-        try:
-            # Logfile logging is UTF-8 on purpose.
-            # Since salt uses yaml and yaml uses either UTF-8 or UTF-16, if a
-            # user is not using plain ascii, he's system should be ready to
-            # handle UTF-8.
-            handler = getattr(
-                logging.handlers, 'WatchedFileHandler', logging.FileHandler
-            )(log_path, mode='a', encoding='utf-8', delay=0)
-        except (IOError, OSError):
-            sys.stderr.write(
-                'Failed to open log file, do you have permission to write to '
-                '{0}\n'.format(log_path)
-            )
-            sys.exit(2)
 
-    handler.setLevel(level)
+    try:
+        # Logfile logging is UTF-8 on purpose.
+        # Since salt uses yaml and yaml uses either UTF-8 or UTF-16, if a
+        # user is not using plain ascii, he's system should be ready to
+        # handle UTF-8.
+        return getattr(
+            logging.handlers, 'WatchedFileHandler', logging.FileHandler
+        )(log_path, mode='a', encoding='utf-8', delay=0)
+    except (IOError, OSError), err:
+        logging.getLogger(__name__).error(
+            'Failed to open log file, do you have permission to write to '
+            '{0}\n'.format(log_path),
+            # Show the traceback if the debug logging level is enabled
+            exc_info=logging.getLogger().isEnabledFor(logging.DEBUG)
 
-    # Set the default console formatter config
-    if not log_format:
-        log_format = '%(asctime)s [%(name)-15s][%(levelname)-8s] %(message)s'
-    if not date_format:
-        date_format = '%Y-%m-%d %H:%M:%S'
-
-    formatter = logging.Formatter(log_format, datefmt=date_format)
-
-    handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
-
-    global __LOGFILE_CONFIGURED
-    __LOGFILE_CONFIGURED = True
-
-
-def set_logger_level(logger_name, log_level='error'):
-    '''
-    Tweak a specific logger's logging level
-    '''
-    logging.getLogger(logger_name).setLevel(
-        LOG_LEVELS.get(log_level.lower(), logging.ERROR)
-    )
+        )
+        sys.exit(err.errno)
+    except Exception, exc:
+        logging.getLogger(__name__).error(
+            'Failed to setup the log file({0}) logging handler: {1}'.format(
+                log_path, exc
+            ),
+            # Show the traceback if the debug logging level is enabled
+            exc_info=logging.getLogger().isEnabledFor(logging.DEBUG)
+        )
+        sys.exit(2)
 
 
 def __remove_null_logging_handler():
