@@ -367,7 +367,7 @@ def setup_logfile_logger(log_path, log_level='error', log_format=None,
         )
         return
 
-    handler = __setup_logfile_handler(log_path)
+    handler = _setup_logfile_handler(log_path)
     if handler is None:
         # Do not proceed with any more configuration since it will fail, we
         # have the temp logging already setup and the user should see
@@ -407,7 +407,7 @@ def set_logger_level(logger_name, log_level='error'):
     )
 
 
-def __setup_logfile_handler(log_path):
+def _setup_logfile_handler(log_path):
     '''
     Generic log file handler setup function
     '''
