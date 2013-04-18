@@ -111,6 +111,7 @@ DEFAULT_MINION_OPTS = {
     'tcp_keepalive_idle': 300,
     'tcp_keepalive_cnt': -1,
     'tcp_keepalive_intvl': -1,
+    'auditors': ['logfile']
 }
 
 DEFAULT_MASTER_OPTS = {
@@ -193,6 +194,7 @@ DEFAULT_MASTER_OPTS = {
     'win_repo': '/srv/salt/win/repo',
     'win_repo_mastercachefile': '/srv/salt/win/repo/winrepo.p',
     'win_gitrepos': ['https://github.com/saltstack/salt-winrepo.git'],
+    'auditors': ['logfile']
 }
 
 
@@ -374,9 +376,11 @@ def get_id():
     - localhost may be better than killing the minion
     '''
 
-    log.debug('Guessing ID. The id can be explicitly in set {0}'.format(
-            '/etc/salt/minion')
-            )
+    log.debug(
+        'Guessing ID. The id can be explicitly in set {0}'.format(
+            '/etc/salt/minion'
+        )
+    )
     fqdn = socket.getfqdn()
     if 'localhost' != fqdn:
         log.info('Found minion id from getfqdn(): {0}'.format(fqdn))
@@ -385,7 +389,7 @@ def get_id():
     # Can /etc/hosts help us?
     try:
         # TODO Add windoes host file support
-        with open('/etc/hosts') as f:
+        with salt.utils.fopen('/etc/hosts') as f:
             line = f.readline()
             while line:
                 names = line.split()
@@ -393,8 +397,11 @@ def get_id():
                 if ip.startswith('127.'):
                     for name in names:
                         if name != 'localhost':
-                            log.info(('Found minion id in hosts file: {0}'
-                                ).format(name))
+                            log.info(
+                                'Found minion id in hosts file: {0}'.format(
+                                    name
+                                )
+                            )
                             return name, False
                 line = f.readline()
     except Exception:

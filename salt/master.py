@@ -18,7 +18,6 @@ import datetime
 import pwd
 import getpass
 import resource
-import traceback
 import subprocess
 import multiprocessing
 import sys
@@ -29,6 +28,7 @@ import yaml
 from M2Crypto import RSA
 
 # Import salt libs
+#import salt.audit
 import salt.crypt
 import salt.utils
 import salt.client
@@ -92,6 +92,7 @@ class SMaster(object):
         self.master_key = salt.crypt.MasterKeys(self.opts)
         self.key = self.__prep_key()
         self.crypticle = self.__prep_crypticle()
+        self.auditor = salt.audit.Auditor(self.opts)
 
     def __prep_crypticle(self):
         '''
@@ -680,9 +681,12 @@ class AESFuncs(object):
         # "master_tops" system
         if self.opts['external_nodes']:
             if not salt.utils.which(self.opts['external_nodes']):
-                log.error(('Specified external nodes controller {0} is not'
-                           ' available, please verify that it is installed'
-                           '').format(self.opts['external_nodes']))
+                log.error(
+                    'Specified external nodes controller {0} is not'
+                    ' available, please verify that it is installed'.format(
+                        self.opts['external_nodes']
+                    )
+                )
                 return {}
             cmd = '{0} {1}'.format(self.opts['external_nodes'], load['id'])
             ndata = yaml.safe_load(
@@ -691,10 +695,8 @@ class AESFuncs(object):
                         shell=True,
                         stdout=subprocess.PIPE
                         ).communicate()[0])
-            if 'environment' in ndata:
-                env = ndata['environment']
-            else:
-                env = 'base'
+
+            env = ndata.get('environment', 'base')
 
             if 'classes' in ndata:
                 if isinstance(ndata['classes'], dict):
@@ -1031,17 +1033,21 @@ class AESFuncs(object):
             try:
                 load['timeout'] = int(clear_load['tmo'])
             except ValueError:
-                msg = 'Failed to parse timeout value: {0}'.format(
-                        clear_load['tmo'])
-                log.warn(msg)
+                log.warn(
+                    'Failed to parse timeout value: {0}'.format(
+                        clear_load['tmo']
+                    )
+                )
                 return {}
         if 'timeout' in clear_load:
             try:
                 load['timeout'] = int(clear_load['timeout'])
             except ValueError:
-                msg = 'Failed to parse timeout value: {0}'.format(
-                        clear_load['tmo'])
-                log.warn(msg)
+                log.warn(
+                    'Failed to parse timeout value: {0}'.format(
+                        clear_load['tmo']
+                    )
+                )
                 return {}
         if 'tgt_type' in clear_load:
             if clear_load['tgt_type'].startswith('node'):
@@ -1066,7 +1072,7 @@ class AESFuncs(object):
                 id_ = minion.keys()[0]
                 ret[id_] = minion[id_].get('ret', None)
         return ret
-        
+
 
     def run_func(self, func, load):
         '''
@@ -1080,9 +1086,11 @@ class AESFuncs(object):
             try:
                 ret = getattr(self, func)(load)
             except Exception:
-                trb = traceback.format_exc()
                 ret = ''
-                log.error('Error in function {0}:\n{1}'.format(func, trb))
+                log.error(
+                    'Error in function {0}:\n'.format(func),
+                    exc_info=True
+                )
         else:
             log.error(
                 'Received function {0} which is unavailable on the master, '
@@ -1806,11 +1814,10 @@ class ClearFuncs(object):
                     )
                 )
             except Exception:
-                trb = traceback.format_exc()
                 log.critical(
-                        'The specified returner threw a stack trace:\n{0}'
-                        ''.format(trb)
-                    )
+                    'The specified returner threw a stack trace:\n',
+                    exc_info=True
+                )
         # Set up the payload
         payload = {'enc': 'aes'}
         # Altering the contents of the publish load is serious!! Changes here

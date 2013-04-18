@@ -133,8 +133,8 @@
 # master or minion as root, but have a non-root group be given access to
 # your pki_dir.  To make the access explicit, root must belong to the group
 # you've given access to.  This is potentially quite insecure.
-# If an autosign_file is specified, enabling permissive_pki_access will allow group access
-# to that specific file.
+# If an autosign_file is specified, enabling permissive_pki_access will allow
+# group access to that specific file.
 #permissive_pki_access: False
 
 # Allow users on the master access to execute specific commands on minions.
@@ -426,6 +426,12 @@
 #     'salt.modules': 'debug'
 #
 #log_granular_levels: {}
+
+# Audit log file will contain audit related messages only. The supported
+# configuration is the same as the log_file configuration above.
+#
+#audit_log_file: /var/log/salt/master.audit
+
 
 
 #####         Node Groups           #####

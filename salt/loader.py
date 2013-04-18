@@ -177,6 +177,15 @@ def auth(opts, whitelist=None):
     return load.gen_functions(whitelist=whitelist)
 
 
+def audit(opts, auditors):
+    '''
+    Returns the auditors modules.
+    '''
+    load = _create_loader(opts, 'audit', 'auditors')
+    ret = load.gen_functions(whitelist=auditors)
+    return ret
+
+
 def fileserver(opts, backends):
     '''
     Returns the file server modules
@@ -435,13 +444,14 @@ class Loader(object):
                 exc_info=True
             )
             return mod
-        except Exception:
-            log.warning(
+        except Exception, exc:
+            log.warn(
                 'Failed to import {0} {1}, this is due most likely to a '
-                'syntax error:\n'.format(
-                    self.tag, name
+                'syntax error: {2}\n'.format(
+                    self.tag, name, exc
                 ),
-                exc_info=True
+                # Show the traceback if the debug logging level is enabled
+                exc_info=log.isEnabledFor(logging.DEBUG)
             )
             return mod
         if hasattr(mod, '__opts__'):
