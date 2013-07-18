@@ -91,7 +91,16 @@ if sys.version_info < (2, 7):
     logging.NullHandler = NullHandler
 
 
-class QueueLoggingHandler(logging.NullHandler):
+class _NewStyleClassMixIn(object):
+    '''
+    Simple new style class to make pylint shut up!
+    This is required because SaltLoggingClass can't subclass object directly:
+
+        'Cannot create a consistent method resolution order (MRO) for bases'
+    '''
+
+
+class QueueLoggingHandler(logging.NullHandler, _NewStyleClassMixIn):
 
     def __init__(self, *args, **kwargs):
         self.__max_queue_size = kwargs.pop('max_queue_size', 10000)
@@ -168,15 +177,6 @@ class LoggingMixInMeta(type):
         return super(LoggingMixInMeta, mcs).__new__(
             mcs, name, tuple(bases), attrs
         )
-
-
-class _NewStyleClassMixIn(object):
-    '''
-    Simple new style class to make pylint shut up!
-    This is required because SaltLoggingClass can't subclass object directly:
-
-        'Cannot create a consistent method resolution order (MRO) for bases'
-    '''
 
 
 class SaltLoggingClass(LOGGING_LOGGER_CLASS, _NewStyleClassMixIn):
