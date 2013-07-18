@@ -23,6 +23,9 @@ import urlparse
 import logging
 import logging.handlers
 
+# Import salt libs
+import salt.log.handlers
+
 TRACE = logging.TRACE = 5
 GARBAGE = logging.GARBAGE = 1
 
@@ -68,26 +71,8 @@ def is_temp_logging_configured():
     return __TEMP_LOGGING_CONFIGURED
 
 
-if sys.version_info < (2, 7):
-    # Since the NullHandler is only available on python >= 2.7, here's a copy
-    class NullHandler(logging.Handler):
-        '''
-        This is 1 to 1 copy of python's 2.7 NullHandler
-        '''
-        def handle(self, record):
-            pass
-
-        def emit(self, record):
-            pass
-
-        def createLock(self):  # pylint: disable=C0103
-            self.lock = None
-
-    logging.NullHandler = NullHandler
-
-
-# Store a reference to the null logging handler
-LOGGING_NULL_HANDLER = logging.NullHandler()
+# Store a reference to the temporary queue logging handler
+LOGGING_NULL_HANDLER = salt.log.handlers.QueueLoggingHandler()
 
 # Store a reference to the temporary console logger
 LOGGING_TEMP_HANDLER = logging.StreamHandler(sys.stderr)
@@ -275,8 +260,6 @@ def setup_temp_logger(log_level='error'):
         )
         return
 
-    # Remove the temporary null logging handler
-    __remove_null_logging_handler()
 
     if log_level is None:
         log_level = 'warning'
@@ -285,6 +268,9 @@ def setup_temp_logger(log_level='error'):
 
     handler = None
     for handler in logging.root.handlers:
+        if handler is LOGGING_NULL_HANDLER:
+            continue
+
         if handler.stream is sys.stderr:
             # There's already a logging handler outputting to sys.stderr
             break
@@ -298,6 +284,11 @@ def setup_temp_logger(log_level='error'):
     )
     handler.setFormatter(formatter)
     logging.getLogger().addHandler(handler)
+
+    # Sync the null logging handler messages with the temporary handler
+    LOGGING_NULL_HANDLER.sync_with_handlers([handler])
+    # Remove the temporary null logging handler
+    __remove_null_logging_handler()
 
     global __TEMP_LOGGING_CONFIGURED
     __TEMP_LOGGING_CONFIGURED = True
