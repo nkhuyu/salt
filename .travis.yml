@@ -28,3 +28,4 @@ notifications:
     channels: "irc.freenode.org#salt-devel"
     on_success: change
     on_failure: change
+	
